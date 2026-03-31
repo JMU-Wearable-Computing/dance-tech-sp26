@@ -25,7 +25,7 @@ USE_MULTICAST  = True
 
 # Name must match exactly the rigid-body or bone name in Motive.
 # Set to None to receive all tracked entities.
-TARGET_NAME = "Box"
+TARGET_NAME = None  # None = all entities, "Name" = single entity
 
 # Isadora OSC receiver config
 ISADORA_IP = "127.0.0.1"
