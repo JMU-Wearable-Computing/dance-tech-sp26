@@ -1,0 +1,2 @@
+# Optional dependencies for future work
+python-osc>=1.8.3
