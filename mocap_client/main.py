@@ -18,6 +18,7 @@ from mocap_client.nat_client import NatClient
 from mocap_client.osc_processor import OSCProcessor
 
 # --- Configuration -------------------------------------------------------
+# Motive NatNet server config
 SERVER_IP      = "127.0.0.1"
 LOCAL_IP       = "127.0.0.1"
 USE_MULTICAST  = True
@@ -25,6 +26,10 @@ USE_MULTICAST  = True
 # Name must match exactly the rigid-body or bone name in Motive.
 # Set to None to receive all tracked entities.
 TARGET_NAME = "Box"
+
+# Isadora OSC receiver config
+ISADORA_IP = "127.0.0.1"
+ISADORA_PORT = 1234
 # -------------------------------------------------------------------------
 
 
@@ -34,9 +39,9 @@ def main():
 
     q = Queue()
 
-    osc = OSCProcessor(q)
+    osc = OSCProcessor(q, isadora_ip=ISADORA_IP, isadora_port=ISADORA_PORT)
     osc.start()
-    log.info("OSC_Processor started.")
+    log.info(f"OSC_Processor started, Isadora at {ISADORA_IP}:{ISADORA_PORT}")
 
     nat = NatClient(
         out_queue=q,

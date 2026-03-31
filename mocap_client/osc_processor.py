@@ -1,24 +1,29 @@
-"""OSC_Processor thread skeleton.
+"""OSC_Processor thread: consume quaternion payloads and send to Isadora.
 
 This module exposes `OSCProcessor`, a thread that consumes quaternion
-payloads from a queue. Implementation of actual OSC sending will be added
-later; currently it prints and ACKs processed items.
+payloads from a queue and sends them to Isadora via OSC on the address
+/isadora-multi/1 (4 float values: qx, qy, qz, qw).
 """
 import threading
 import time
 from queue import Queue, Empty
 from typing import Optional
 
+from pythonosc import udp_client
+
 
 class OSCProcessor(threading.Thread):
-    """Consume items from an input Queue and process them.
+    """Consume items from an input Queue and send quaternion data via OSC.
 
     Expected payloads are dicts with keys: `segment`, `quat`, `timestamp`.
+    Sends the quaternion (4 floats) to Isadora via OSC message.
     """
 
-    def __init__(self, in_queue: Queue, name: str = "OSC_Processor"):
+    def __init__(self, in_queue: Queue, isadora_ip: str = "127.0.0.1", 
+                 isadora_port: int = 1234, name: str = "OSC_Processor"):
         super().__init__(name=name, daemon=True)
         self.in_queue = in_queue
+        self.osc_client = udp_client.SimpleUDPClient(isadora_ip, isadora_port)
         self._stop_event = threading.Event()
 
     def stop(self):
@@ -41,10 +46,23 @@ class OSCProcessor(threading.Thread):
                     pass
 
     def _process_item(self, item: dict):
-        # Replace this with OSC sending logic in a future step.
+        """Extract quaternion from item and send to Isadora via OSC.
+        
+        Sends the 4 quaternion values (qx, qy, qz, qw) to /isadora-multi/1
+        so they arrive on Isadora OSC Listener channels 1-4.
+        """
         segment = item.get("segment")
         quat = item.get("quat")
         ts = item.get("timestamp")
-        print(f"OSC_Processor: received {segment} @ {ts:.3f} quat={quat}")
-        # simulate a small processing delay
-        time.sleep(0.005)
+        
+        if quat is None or len(quat) != 4:
+            print(f"OSC_Processor: invalid quat for {segment}, skipping")
+            return
+        
+        try:
+            # Send 4-float quaternion list to /isadora-multi/1
+            # Isadora receives as channels 1-4: qx, qy, qz, qw
+            self.osc_client.send_message("/isadora-multi/1", list(quat))
+            print(f"OSC_Processor: sent {segment} quat={quat} @ {ts:.3f}")
+        except Exception as e:
+            print(f"OSC_Processor: send failed for {segment}: {e}")
