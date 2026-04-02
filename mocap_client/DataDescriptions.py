@@ -148,14 +148,9 @@ class MarkerSetDescription:
         num_markers = len(self.marker_names_list)
         out_string += "%sMarker Count   : %d\n" % (out_tab_str2, num_markers)
 
-        # Open the file for appending (or create it if it doesn't exist)
-        with open("output.txt", "w") as file:
-            for i in range(num_markers):
-                marker_line = "%s%3.1d Marker Name: %s\n" % (out_tab_str3, i, get_as_string(self.marker_names_list[i]))
-                out_string += marker_line
-
-                # Write the same line to the file
-                file.write(marker_line)
+        for i in range(num_markers):
+            marker_line = "%s%3.1d Marker Name: %s\n" % (out_tab_str3, i, get_as_string(self.marker_names_list[i]))
+            out_string += marker_line
 
             file.flush()
 

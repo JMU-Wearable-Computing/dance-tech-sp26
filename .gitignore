@@ -29,3 +29,5 @@ Thumbs.db
 # Output / logs
 output.txt
 *.log
+*_output.txt
+*_err.txt
