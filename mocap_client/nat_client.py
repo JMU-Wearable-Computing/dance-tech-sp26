@@ -60,6 +60,7 @@ class NatClient:
 
         # Populated once DataDescriptions arrive: rigid-body id -> segment name
         self._id_to_name: dict = {}
+        self._skeleton_bone_ids: set = {}  # IDs that belong to skeletons (excluded from rigid body path)
 
         self._data_q: queue.Queue = queue.Queue()
         self._command_q: queue.Queue = queue.Queue()
@@ -163,12 +164,15 @@ class NatClient:
             return name.decode("utf-8") if isinstance(name, bytes) else name
 
         new_map: dict = {}
+        bone_ids: set = set()
         for rb_desc in desc.rigid_body_list:
             new_map[rb_desc.id_num] = _decode(rb_desc.sz_name)
         for skel_desc in desc.skeleton_list:
             for rb_desc in skel_desc.rigid_body_description_list:
                 new_map[rb_desc.id_num] = _decode(rb_desc.sz_name)
+                bone_ids.add(rb_desc.id_num)
         self._id_to_name = new_map
+        self._skeleton_bone_ids = bone_ids
 
     def _process_frame(self, frame: _MCD.MoCapData):
         """Filter rigid bodies by segment name and enqueue quaternion payloads."""
@@ -206,6 +210,9 @@ class NatClient:
                 if bone_suffix not in self.skeleton_bones:
                     return
         else:
+            # Exclude bones that belong to skeletons from the rigid body path
+            if lookup_id in self._skeleton_bone_ids:
+                return
             # Rigid bodies: filter by target_name if provided
             if self.target_name is not None and seg_name != self.target_name:
                 return
