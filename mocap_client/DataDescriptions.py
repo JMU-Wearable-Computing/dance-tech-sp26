@@ -152,8 +152,6 @@ class MarkerSetDescription:
             marker_line = "%s%3.1d Marker Name: %s\n" % (out_tab_str3, i, get_as_string(self.marker_names_list[i]))
             out_string += marker_line
 
-            file.flush()
-
         return out_string
 
 class RBMarker:
