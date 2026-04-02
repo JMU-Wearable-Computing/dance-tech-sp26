@@ -200,6 +200,7 @@ class NatClient:
         self.out_queue.put({
             "segment":   seg_name,
             "quat":      rb.rot,
+            "pos":       rb.pos,
             "frame":     frame_num,
             "timestamp": timestamp,
         })

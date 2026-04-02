@@ -46,13 +46,14 @@ class OSCProcessor(threading.Thread):
                     pass
 
     def _process_item(self, item: dict):
-        """Extract quaternion from item and send to Isadora via OSC.
+        """Extract position and quaternion from item and send to Isadora via OSC.
         
-        Sends the 4 quaternion values (qx, qy, qz, qw) to /isadora-multi/1
-        so they arrive on Isadora OSC Listener channels 1-4.
+        Sends the position as a string to /isadora/1 and the 4 quaternion values
+        (qx, qy, qz, qw) to /isadora-multi/1.
         """
         segment = item.get("segment")
         quat = item.get("quat")
+        pos = item.get("pos")
         ts = item.get("timestamp")
         
         if quat is None or len(quat) != 4:
@@ -60,6 +61,12 @@ class OSCProcessor(threading.Thread):
             return
         
         try:
+            # Send position as a string to /isadora/1
+            if pos is not None and len(pos) == 3:
+                pos_str = f"{pos[0]:.4f} {pos[1]:.4f} {pos[2]:.4f}"
+                self.osc_client.send_message("/isadora/1", pos_str)
+                print(f"OSC_Processor: sent {segment} pos={pos_str} @ {ts:.3f}")
+            
             # Send 4-float quaternion list to /isadora-multi/1
             # Isadora receives as channels 1-4: qx, qy, qz, qw
             self.osc_client.send_message("/isadora-multi/1", list(quat))
