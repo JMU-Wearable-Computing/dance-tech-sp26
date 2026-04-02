@@ -48,9 +48,11 @@ class NatClient:
         server_ip: str = "127.0.0.1",
         local_ip: str = "127.0.0.1",
         use_multicast: bool = True,
+        skeleton_bones: Optional[list] = None,
     ):
         self.out_queue = out_queue
         self.target_name: Optional[str] = target_name
+        self.skeleton_bones: Optional[list] = skeleton_bones  # whitelist of bone names; None = all
 
         self._server_ip = server_ip
         self._local_ip = local_ip
@@ -181,21 +183,33 @@ class NatClient:
         if frame.skeleton_data:
             for skeleton in frame.skeleton_data.skeleton_list:
                 for rb in skeleton.rigid_body_list:
-                    self._maybe_enqueue(rb, frame_num, timestamp)
+                    self._maybe_enqueue(rb, frame_num, timestamp, is_bone=True)
 
         # Top-level rigid bodies
         if frame.rigid_body_data:
             for rb in frame.rigid_body_data.rigid_body_list:
-                self._maybe_enqueue(rb, frame_num, timestamp)
+                self._maybe_enqueue(rb, frame_num, timestamp, is_bone=False)
 
-    def _maybe_enqueue(self, rb, frame_num: int, timestamp: float):
+    def _maybe_enqueue(self, rb, frame_num: int, timestamp: float, is_bone: bool = False):
         """Enqueue a quaternion payload if the rigid body passes the filter."""
-        seg_name = self._id_to_name.get(rb.id_num)
+        # Skeleton bone IDs in frame data are encoded as (skeleton_id << 16) | bone_id.
+        # DataDescriptions use only the low 16 bits (the bone_id).
+        lookup_id = (rb.id_num & 0xFFFF) if is_bone else rb.id_num
+        seg_name = self._id_to_name.get(lookup_id)
         if seg_name is None:
             return
-        if self.target_name is not None and seg_name != self.target_name:
-            return
-        if not rb.tracking_valid:
+        if is_bone:
+            # Skeleton bones: filter by bone suffix (part after last '_') if whitelist provided.
+            # e.g. "Alyx_Chest" matches whitelist entry "Chest"
+            if self.skeleton_bones is not None:
+                bone_suffix = seg_name.rsplit("_", 1)[-1]
+                if bone_suffix not in self.skeleton_bones:
+                    return
+        else:
+            # Rigid bodies: filter by target_name if provided
+            if self.target_name is not None and seg_name != self.target_name:
+                return
+        if not is_bone and not rb.tracking_valid:
             return
         self.out_queue.put({
             "segment":   seg_name,
