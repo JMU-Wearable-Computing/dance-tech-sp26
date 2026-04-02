@@ -60,7 +60,7 @@ class NatClient:
 
         # Populated once DataDescriptions arrive: rigid-body id -> segment name
         self._id_to_name: dict = {}
-        self._skeleton_bone_ids: set = {}  # IDs that belong to skeletons (excluded from rigid body path)
+        self._skeleton_bone_ids: set = set()  # IDs that belong to skeletons (excluded from rigid body path)
 
         self._data_q: queue.Queue = queue.Queue()
         self._command_q: queue.Queue = queue.Queue()
@@ -169,10 +169,15 @@ class NatClient:
             new_map[rb_desc.id_num] = _decode(rb_desc.sz_name)
         for skel_desc in desc.skeleton_list:
             for rb_desc in skel_desc.rigid_body_description_list:
-                new_map[rb_desc.id_num] = _decode(rb_desc.sz_name)
-                bone_ids.add(rb_desc.id_num)
-        self._id_to_name = new_map
-        self._skeleton_bone_ids = bone_ids
+                # Frame data encodes bone IDs as (skeleton_id << 16) | bone_id.
+                # Key the map the same way so multiple skeletons don't collide.
+                encoded_id = (skel_desc.id_num << 16) | rb_desc.id_num
+                new_map[encoded_id] = _decode(rb_desc.sz_name)
+                bone_ids.add(encoded_id)
+        # Merge into existing maps — never remove entries so skeletons that
+        # temporarily leave the stream are not dropped.
+        self._id_to_name.update(new_map)
+        self._skeleton_bone_ids.update(bone_ids)
 
     def _process_frame(self, frame: _MCD.MoCapData):
         """Filter rigid bodies by segment name and enqueue quaternion payloads."""
@@ -197,8 +202,8 @@ class NatClient:
     def _maybe_enqueue(self, rb, frame_num: int, timestamp: float, is_bone: bool = False):
         """Enqueue a quaternion payload if the rigid body passes the filter."""
         # Skeleton bone IDs in frame data are encoded as (skeleton_id << 16) | bone_id.
-        # DataDescriptions use only the low 16 bits (the bone_id).
-        lookup_id = (rb.id_num & 0xFFFF) if is_bone else rb.id_num
+        # The map is also keyed this way, so use the raw id_num directly for bones.
+        lookup_id = rb.id_num if is_bone else rb.id_num
         seg_name = self._id_to_name.get(lookup_id)
         if seg_name is None:
             return

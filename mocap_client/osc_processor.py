@@ -27,7 +27,7 @@ class OSCProcessor(threading.Thread):
         self.osc_client = udp_client.SimpleUDPClient(isadora_ip, isadora_port)
         self._stop_event = threading.Event()
         self._min_interval = 1.0 / target_fps
-        self._last_sent: float = 0.0
+        self._last_sent: dict = {}  # segment -> last send time
 
     def stop(self):
         self._stop_event.set()
@@ -55,11 +55,10 @@ class OSCProcessor(threading.Thread):
         (qx, qy, qz, qw) to /isadora-multi/1.
         """
         now = time.time()
-        if now - self._last_sent < self._min_interval:
-            return
-        self._last_sent = now
-
         segment = item.get("segment")
+        if now - self._last_sent.get(segment, 0.0) < self._min_interval:
+            return
+        self._last_sent[segment] = now
         quat = item.get("quat")
         pos = item.get("pos")
         ts = item.get("timestamp")
