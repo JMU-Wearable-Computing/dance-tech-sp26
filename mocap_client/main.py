@@ -25,7 +25,11 @@ USE_MULTICAST  = True
 
 # Name must match exactly the rigid-body or bone name in Motive.
 # Set to None to receive all tracked entities.
-TARGET_NAME = "Box"  # None = all entities, "Name" = single entity
+TARGET_NAME = None  # None = all rigid bodies, "Name" = single rigid body
+
+# Skeleton bone whitelist — only these bones are forwarded from human skeletons.
+# Check Motive's skeleton asset for exact bone names (e.g. "Chest", "Hips").
+SKELETON_BONES = ["Chest"]  # None = all bones; matched by bone suffix (e.g. "Chest" matches "Alyx_Chest")
 
 # Isadora OSC receiver config
 ISADORA_IP = "127.0.0.1"
@@ -49,6 +53,7 @@ def main():
         server_ip=SERVER_IP,
         local_ip=LOCAL_IP,
         use_multicast=USE_MULTICAST,
+        skeleton_bones=SKELETON_BONES,
     )
 
     if not nat.start():
