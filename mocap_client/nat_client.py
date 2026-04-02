@@ -128,9 +128,9 @@ class NatClient:
     def _frame_loop(self):
         """Drain both NatNetClient queues and dispatch each item."""
         while not self._stop_event.is_set():
-            # Re-request DataDescriptions every 5 s until ID map is populated
-            if not self._id_to_name and (time.time() - self._last_modeldef_request) > 5.0:
-                print("[NatClient] Requesting DataDescriptions...")
+            # Re-request DataDescriptions every 5 s to pick up any new rigid
+            # bodies or skeletons added in Motive while the stream is live.
+            if (time.time() - self._last_modeldef_request) > 5.0:
                 self._client.send_request(
                     self._client.command_socket,
                     self._client.NAT_REQUEST_MODELDEF,
