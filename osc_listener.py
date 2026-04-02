@@ -7,14 +7,14 @@ def message_handler(addr, *args):
     print(f"[{addr}] {' '.join(str(a) for a in args)}")
 
 def main():
-    # Create dispatcher and map message handler
+    # Create dispatcher and map message handler to all addresses
     disp = dispatcher.Dispatcher()
-    disp.map("/isadora/1", message_handler)
+    disp.set_default_handler(message_handler)
     
     # Create server on localhost port 1234
     server = osc_server.ThreadingOSCUDPServer(("127.0.0.1", 1234), disp)
     print("OSC Listener started on 127.0.0.1:1234")
-    print("Waiting for messages on /isadora/1 (press Ctrl+C to stop)...")
+    print("Waiting for all OSC messages (press Ctrl+C to stop)...")
     
     try:
         server.serve_forever()
