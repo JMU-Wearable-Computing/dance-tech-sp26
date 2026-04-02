@@ -24,6 +24,38 @@ pip install -r mocap_client/requirements.txt
 python osc_listener.py
 ```
 
+
+### How to make a new tool/plugin
+
+OSC output (data getting sent to isadora) is built from small plugin functions in `utils/`.
+
+Each plugin should follow the shared handler shape used by `utils/middleware.py`:
+
+```python
+def my_plugin(item: dict, osc_client) -> bool:
+  ...
+```
+
+- `item` is the payload from `nat_client.py`
+- `osc_client` is the active `pythonosc` client
+- return `True` when the plugin handled the payload, otherwise return `False`
+
+To add a new effect:
+
+1. Create a new file in `utils/` for the effect logic.
+2. Keep the plugin signature consistent with `utils/middleware.py`.
+3. Register the plugin in `DEFAULT_HANDLERS` inside [utils/middleware.py](utils/middleware.py).
+4. Leave `mocap_client/osc_processor.py` focused on queue handling and dispatch.
+
+Example plugins already in the repo are [utils/xyz.py](utils/xyz.py) and [utils/velocity.py](utils/velocity.py).
+
+*IMPORTANT*: these functions dont return, they send data directly out
+```python
+    osc_client.send_message(f"/{base}x", float(pos[0]))
+
+```
+
+
 ### Architecture
 
 ```
@@ -54,6 +86,14 @@ Motive (NatNet UDP)
                            ▼
                        OSCProcessor           (osc_processor.py)
                        consumer daemon thread @ 30 Hz
+                         - hands payloads to middleware.py
+                           │
+                           ▼
+                       middleware.py          (dispatch layer)
+                         - routes each payload to enabled effects
+                           │
+                           ▼
+                       xyz.py                 (position sender)
                          - sends /<name>x, /<name>y, /<name>z as floats
 ```
 
@@ -104,7 +144,9 @@ Position is sent as **three separate float messages** at up to 30 Hz:
 | `mocap_client/MoCapData.py` | Data-model classes for a MoCap frame. Sourced from polymidi. |
 | `mocap_client/DataDescriptions.py` | Data-model classes for Motive asset definitions. Sourced from polymidi. Has a known `NameError` bug in `get_as_string()` that does not affect operation. |
 | `mocap_client/nat_client.py` | Wraps NatNetClient; builds id→name map; filters and enqueues payloads. |
-| `mocap_client/osc_processor.py` | Daemon thread consuming payloads and sending OSC at 30 Hz. |
+| `utils/middleware.py` | Dispatch layer for outgoing OSC effects. |
+| `utils/xyz.py` | XYZ position sender for OSC output. |
+| `mocap_client/osc_processor.py` | Daemon thread consuming payloads and dispatching them through middleware at 30 Hz. |
 | `mocap_client/main.py` | Entry point and configuration. |
 | `osc_listener.py` | Debug tool — prints all incoming OSC messages on port 1234. |
 | `start_mocap.bat` | Windows launcher — activates venv and runs `python -m mocap_client.main`. |
@@ -127,88 +169,4 @@ check for skeleton bones.
 **`DataDescriptions.py` crash**
 A `NameError: name 'file'` in `get_as_string()` crashes the command thread's
 pretty-printer. This does not affect data flow — `_build_id_map` runs before the crash.
-                         4. if name matches target_name → enqueue payload
-                           │
-                           ▼
-                       out_queue (thread-safe Queue)
-                           │
-                           ▼
-                       OSCProcessor           (osc_processor.py)
-                       consumer daemon thread
-                         - dequeues payload
-                         - _process_item() ← put OSC send logic here
-```
-
-**Payload schema** pushed onto the queue:
-
-```python
-{
-    "segment":   str,            # rigid-body / bone name from Motive
-    "quat":      (qx, qy, qz, qw),  # orientation quaternion (floats)
-    "frame":     int,            # Motive frame number
-    "timestamp": float,          # Motive timestamp in seconds
-}
-```
-
-### Components
-
-| File | Role |
-|---|---|
-| `NatNetClient.py` | Low-level NatNet protocol (UDP socket management, packet decode). Sourced from the polymidi project. |
-| `MoCapData.py` | Data-model classes for a single MoCap frame (rigid bodies, skeletons, markers). Sourced from polymidi. |
-| `DataDescriptions.py` | Data-model classes for the Motive model definition (asset names, bone hierarchy). Sourced from polymidi. |
-| `nat_client.py` | **NatClient** — wraps NatNetClient, builds the id→name map from DataDescriptions, filters frames by `target_name`, and pushes quaternion payloads onto `out_queue`. |
-| `osc_processor.py` | **OSCProcessor** — daemon thread that consumes payloads from the queue. Currently prints to console; OSC send logic goes in `_process_item()`. |
-| `main.py` | Entry point. Configure `SERVER_IP`, `LOCAL_IP`, `USE_MULTICAST`, and `TARGET_NAME` here. |
-
-### Setup
-
-```powershell
-# From the repo root
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r mocap_client/requirements.txt
-```
-
-### Running
-
-1. Open Motive and ensure **Data Streaming** is enabled (Edit → Project → Streaming).
-2. Note the name of the rigid body or skeleton bone you want to track (e.g. `Box`).
-3. Edit `mocap_client/main.py`:
-   ```python
-   SERVER_IP   = "127.0.0.1"   # Motive machine IP (loopback if same machine)
-   TARGET_NAME = "Box"          # exact name in Motive; None = forward all
-   ```
-4. Run:
-   ```powershell
-   python -m mocap_client.main
-   ```
-
-### Extending OSC_Processor
-
-`OSCProcessor._process_item(item)` in `osc_processor.py` is the integration point. Replace the `print` statement with your OSC send logic:
-
-```python
-from pythonosc.udp_client import SimpleUDPClient
-
-client = SimpleUDPClient("192.168.1.x", 9000)
-
-def _process_item(self, item: dict):
-    qx, qy, qz, qw = item["quat"]
-    client.send_message(f"/mocap/{item['segment']}/quat", [qx, qy, qz, qw])
-```
-
----
-
-## sketchbook
-
-Arduino sketches for wearable sensor nodes used in the course.
-
-| Sketch | Description |
-|---|---|
-| `AccelLED_Magic` | ADXL313 accelerometer driving LED output |
-| `DistenceBuzzer_Magic` | Ultrasonic distance sensor with buzzer feedback |
-| `Mario_Magic` | Mario theme buzzer sketch |
-| `PotServo_Magic` | Potentiometer-controlled servo |
-| `The_Magic` | Combined sensor demo |
 
