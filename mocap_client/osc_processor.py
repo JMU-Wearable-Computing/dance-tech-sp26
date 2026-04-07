@@ -1,22 +1,22 @@
-"""OSC_Processor thread: consume quaternion payloads and send to Isadora.
+"""OSC_Processor thread: consume payloads and hand them to middleware.
 
-This module exposes `OSCProcessor`, a thread that consumes quaternion
-payloads from a queue and sends them to Isadora via OSC on the address
-/isadora-multi/1 (4 float values: qx, qy, qz, qw).
+This module exposes `OSCProcessor`, a thread that consumes queued payloads
+and forwards them to the middleware layer for OSC output.
 """
 import threading
 import time
 from queue import Queue, Empty
-from typing import Optional
 
 from pythonosc import udp_client
 
+from utils import middleware
+
 
 class OSCProcessor(threading.Thread):
-    """Consume items from an input Queue and send quaternion data via OSC.
+    """Consume items from an input Queue and forward them to middleware.
 
-    Expected payloads are dicts with keys: `segment`, `quat`, `timestamp`.
-    Sends the quaternion (4 floats) to Isadora via OSC message.
+    Expected payloads are dicts with keys like `segment`, `quat`, `pos`,
+    and `timestamp`.
     """
 
     def __init__(self, in_queue: Queue, isadora_ip: str = "127.0.0.1",
@@ -40,7 +40,6 @@ class OSCProcessor(threading.Thread):
                 continue
 
             try:
-                # placeholder processing: print and mark task done
                 self._process_item(item)
             finally:
                 try:
@@ -49,31 +48,11 @@ class OSCProcessor(threading.Thread):
                     pass
 
     def _process_item(self, item: dict):
-        """Extract position and quaternion from item and send to Isadora via OSC.
-        
-        Sends the position as a string to /isadora/1 and the 4 quaternion values
-        (qx, qy, qz, qw) to /isadora-multi/1.
-        """
+        """Forward a payload to the middleware dispatcher."""
         now = time.time()
         segment = item.get("segment")
         if now - self._last_sent.get(segment, 0.0) < self._min_interval:
             return
         self._last_sent[segment] = now
-        quat = item.get("quat")
-        pos = item.get("pos")
-        ts = item.get("timestamp")
-        
-        if quat is None or len(quat) != 4:
-            print(f"OSC_Processor: invalid quat for {segment}, skipping")
-            return
-        
-        try:
-            # Send position as three separate OSC messages: /<name>x, /<name>y, /<name>z
-            if pos is not None and len(pos) == 3:
-                base = segment.lower() if segment else "unknown"
-                self.osc_client.send_message(f"/{base}x", float(pos[0]))
-                self.osc_client.send_message(f"/{base}y", float(pos[1]))
-                self.osc_client.send_message(f"/{base}z", float(pos[2]))
-                print(f"OSC_Processor: sent /{base}x={pos[0]:.4f} /{base}y={pos[1]:.4f} /{base}z={pos[2]:.4f} @ {ts:.3f}")
-        except Exception as e:
-            print(f"OSC_Processor: send failed for {segment}: {e}")
+
+        middleware.main(item, self.osc_client)
