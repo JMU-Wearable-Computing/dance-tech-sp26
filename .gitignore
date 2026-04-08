@@ -17,7 +17,6 @@ build/
 
 # Byte-compiled
 *.pyc
-*.csv
 
 # IDEs
 .vscode/
