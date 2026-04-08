@@ -186,6 +186,7 @@ python -m replay_client.main <csv_file> [options]
 | `--target-name` | `None` | Filter to single rigid body (e.g., `"dancer1"`). `None` = all |
 | `--skeleton-bones` | `["Chest"]` | Bone suffix whitelist (e.g., `["Chest", "Hips"]`) |
 | `--speed` | `1.0` | Playback speed multiplier (`1.0` = normal, `2.0` = 2× faster) |
+| `--csv-position-units` | `mm` | Position units in CSV (`mm` converts to meters before OSC, `m` sends as-is) |
 | `--isadora-ip` | `127.0.0.1` | IP address of Isadora machine |
 | `--isadora-port` | `1234` | OSC port on Isadora |
 

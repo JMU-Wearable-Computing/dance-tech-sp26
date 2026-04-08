@@ -70,6 +70,13 @@ def parse_args():
         default=1234,
         help="OSC port on Isadora. Default: 1234"
     )
+
+    parser.add_argument(
+        "--csv-position-units",
+        choices=["mm", "m"],
+        default="mm",
+        help="Units used by CSV position columns. 'mm' converts to meters before OSC. Default: mm"
+    )
     
     return parser.parse_args()
 
@@ -94,6 +101,13 @@ def main():
     log.info(f"Target: {args.target_name or 'all rigid bodies'}")
     log.info(f"Speed: {args.speed}x")
     log.info(f"Isadora: {args.isadora_ip}:{args.isadora_port}")
+
+    position_scale = 0.001 if args.csv_position_units == "mm" else 1.0
+    log.info(
+        "CSV position units: %s (applied position scale=%s)",
+        args.csv_position_units,
+        position_scale,
+    )
     
     # Create shared queue
     q = Queue()
@@ -114,6 +128,7 @@ def main():
         target_name=args.target_name,
         skeleton_bones=args.skeleton_bones if args.skeleton_bones else None,
         playback_speed=args.speed,
+        position_scale=position_scale,
     )
     
     if not csv.start():
