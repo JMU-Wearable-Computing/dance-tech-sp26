@@ -93,7 +93,7 @@ Motive (NatNet UDP)
                          - routes each payload to enabled effects
                            │
                            ▼
-                       xyz.py                 (position sender)
+                       xyz.py                EX. (position sender)
                          - sends /<name>x, /<name>y, /<name>z as floats
 ```
 

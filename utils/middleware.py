@@ -3,12 +3,12 @@
 from typing import Callable, Any
 
 from utils.xyz import send_xyz
-
+from utils.bounding_box import bounding_box
 
 OSCPlugin = Callable[[dict, Any], bool]
 
 # Add all plugins you want to use here. Each must match OSCPlugin.
-DEFAULT_HANDLERS: tuple[OSCPlugin, ...] = (send_xyz,)
+DEFAULT_HANDLERS: tuple[OSCPlugin, ...] = (bounding_box,)
 
 
 def main(item: dict, osc_client, handlers: tuple[OSCPlugin, ...] | None = None) -> bool:
