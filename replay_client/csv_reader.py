@@ -5,20 +5,27 @@ Reads exported CSV from Motive and provides payloads compatible with the
 standard middleware pipeline. Handles frame-accurate timing.
 
 Expected CSV format (Motive standard):
-  Frame, Time(Seconds), <RigidBody>x, <RigidBody>y, <RigidBody>z, ...
-  or with skeletons:
-  Frame, Time(Seconds), <Skeleton>:<Bone>x, <Skeleton>:<Bone>y, <Skeleton>:<Bone>z, ...
+  - Metadata rows at top (Format Version, Take Name, etc.)
+  - Type row: indicates "Bone", "Bone Marker", "Marker"
+  - Name row: skeleton:bone names (e.g., "Will:Chest")
+  - Data rows: Frame, then alternating X, Y, Z for each bone (possibly with quaternion)
 
-The reader extracts XYZ positions and enqueues payloads with the same shape as
-nat_client.py for compatibility with middleware.
+The reader skips metadata, parses the header structure, and extracts XYZ positions.
 """
 
 import csv
 import time
 import threading
+import logging
 from queue import Queue
 from typing import Dict, List, Tuple, Optional
+import logging
 
+# Set up logging to see debug messages
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='[%(name)s] %(message)s'
+)
 
 class CSVPayload:
     """Mimics MoCapData frame structure from NatNet for compatibility."""
@@ -27,7 +34,7 @@ class CSVPayload:
         """
         Args:
             frame_num: Frame number from CSV
-            timestamp: Recording timestamp (seconds) from csv
+            timestamp: Recording timestamp (milliseconds / 1000) from csv
             bodies: Dict[name] -> {x, y, z} position data
         """
         self.frame_num = frame_num
@@ -68,155 +75,236 @@ class CSVReader:
         self._thread: Optional[threading.Thread] = None
         self.start_wall_time: Optional[float] = None
         self.start_csv_time: Optional[float] = None
+        self.frame_count = 0
     
     def start(self):
-        """Start playback thread."""
+        """Start playback thread. Returns True if successfully started."""
         if self.running:
-            return
+            return True
         self.running = True
         self._thread = threading.Thread(target=self._playback_loop, daemon=True)
+        logging.debug(f"Starting to read")
         self._thread.start()
+        return True
     
     def stop(self):
         """Stop playback."""
         self.running = False
         if self._thread:
             self._thread.join(timeout=2.0)
+        logging.debug(f"Stopped reading")
     
     def _playback_loop(self):
         """Main playback loop: reads CSV and enqueues frames at correct timing."""
+        print(f"[CSV Reader] Entering read loop for: {self.csv_path}")
         try:
             with open(self.csv_path, 'r') as f:
-                reader = csv.DictReader(f)
+                lines = f.readlines()
+            
+            # Parse metadata from first row (key,value pairs)
+            metadata = {}
+            if lines:
+                meta_line = lines[0].strip()
+                # Split by comma but preserve pairs
+                parts = meta_line.split(',')
+                for i in range(0, len(parts), 2):
+                    if i + 1 < len(parts):
+                        metadata[parts[i]] = parts[i + 1]
+            
+            print(f"[CSV Reader] Metadata: {metadata}")
+            
+            # Read column structure from rows 4, 6, 7 (0-indexed: 3, 5, 6)
+            col_bones = []  # Will store (bone_name, descriptor, axis) for each data column
+            col_descriptors = []
+            col_axes = []
+            
+            if len(lines) > 3:
+                bone_line = lines[3].strip().split(',')
+                print(f"[CSV Reader] Row 4 (bones): {bone_line[:10]}...")
+                col_bones = bone_line
+            
+            if len(lines) > 5:
+                desc_line = lines[5].strip().split(',')
+                print(f"[CSV Reader] Row 6 (descriptors): {desc_line[:10]}...")
+                col_descriptors = desc_line
+            
+            if len(lines) > 6:
+                axis_line = lines[6].strip().split(',')
+                print(f"[CSV Reader] Row 7 (axes): {axis_line[:10]}...")
+                col_axes = axis_line
+            
+            # Build a column map: col_index -> (bone_name, descriptor, axis)
+            col_map = {}
+            for i in range(len(col_bones)):
+                bone = col_bones[i] if i < len(col_bones) else ""
+                desc = col_descriptors[i] if i < len(col_descriptors) else ""
+                axis = col_axes[i] if i < len(col_axes) else ""
+                col_map[i] = (bone, desc, axis)
+            
+            print(f"[CSV Reader] Column map (first 15):")
+            for i in range(min(15, len(col_map))):
+                print(f"  Col {i}: {col_map[i]}")
+            
+            # Start reading data from row 8 (0-indexed: 7)
+            reader = csv.reader(lines[7:])
+            frame_num_row = 0
+            
+            print(f"[CSV Reader] Total lines in file: {len(lines)}")
+            print(f"[CSV Reader] Starting to read from line 7 (row 8)")
+            
+            for row in reader:
+                if not self.running:
+                    break
                 
-                for row in reader:
-                    if not self.running:
-                        break
+                if not row or len(row) < 2:
+                    if frame_num_row < 3:
+                        print(f"[CSV Reader] Skipping empty/short row {frame_num_row}: len={len(row)}")
+                    frame_num_row += 1
+                    continue
+                
+                if frame_num_row < 5:
+                    print(f"[CSV Reader] Data row {frame_num_row}: first 5 cols = {row[:5]}")
+                
+                try:
+                    frame_num = int(float(row[0])) if row[0] else 0
+                    csv_time = float(row[1]) if len(row) > 1 and row[1] else 0.0
                     
-                    # Parse frame metadata
-                    try:
-                        frame_num = int(row.get('Frame', 0))
-                        csv_time = float(row.get('Time(Seconds)', 0))
-                    except (ValueError, KeyError):
-                        continue
-                    
-                    # Initialize playback timing on first frame
-                    if self.start_wall_time is None:
-                        self.start_wall_time = time.time()
-                        self.start_csv_time = csv_time
-                    
-                    # Calculate when this frame should play
-                    elapsed_csv_time = csv_time - self.start_csv_time
-                    adjusted_csv_time = elapsed_csv_time / self.playback_speed
-                    target_time = self.start_wall_time + adjusted_csv_time
-                    
-                    # Wait until it's time to send this frame
-                    now = time.time()
-                    wait_time = target_time - now
-                    if wait_time > 0:
-                        time.sleep(wait_time)
-                    
-                    # Extract position data from row
-                    payload = self._parse_row(row, frame_num, csv_time)
-                    if payload.bodies:  # Only enqueue if we have data
-                        self.out_queue.put(payload)
+                    if frame_num_row < 3:
+                        print(f"[CSV Reader] Parsed frame {frame_num}, time {csv_time}")
+                except (ValueError, IndexError) as e:
+                    if frame_num_row < 3:
+                        print(f"[CSV Reader] Parse error on row {frame_num_row}: {e}, values={row[:3]}")
+                    frame_num_row += 1
+                    continue
+                
+                frame_num_row += 1
+                
+                # Initialize playback timing on first frame
+                if self.start_wall_time is None:
+                    self.start_wall_time = time.time()
+                    self.start_csv_time = csv_time
+                    print(f"[CSV Reader] Starting playback at frame {frame_num}, CSV time {csv_time:.3f}s")
+                
+                # Calculate when this frame should play
+                elapsed_csv_time = csv_time - self.start_csv_time
+                adjusted_csv_time = elapsed_csv_time / self.playback_speed
+                target_time = self.start_wall_time + adjusted_csv_time
+                
+                # Wait until it's time to send this frame
+                now = time.time()
+                wait_time = target_time - now
+                if wait_time > 0.001:
+                    time.sleep(wait_time)
+                
+                # Extract position data from row using col_map
+                payload = self._parse_row(row, frame_num, csv_time, col_map)
+                if payload.bodies:
+                    # Convert CSVPayload to dict format expected by OSCProcessor
+                    for segment_name, pos_dict in payload.bodies.items():
+                        # pos_dict: {x, y, z} -> convert to (x, y, z) tuple for middleware
+                        pos = (
+                            pos_dict.get('x', 0.0),
+                            pos_dict.get('y', 0.0),
+                            pos_dict.get('z', 0.0),
+                        )
+                        msg = {
+                            "segment": segment_name,
+                            "pos": pos,
+                            "frame": frame_num,
+                            "timestamp": payload.timestamp,
+                        }
+                        self.out_queue.put(msg)
+                    self.frame_count += 1
+                    if self.frame_count % 100 == 0:
+                        print(f"[CSV Reader] Queued {self.frame_count} frames")
         
         except FileNotFoundError:
             print(f"[CSV Reader] Error: CSV file not found: {self.csv_path}")
         except Exception as e:
             print(f"[CSV Reader] Error during playback: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             self.running = False
+            print(f"[CSV Reader] Exiting read loop: processed {self.frame_count} frames")
     
-    def _parse_row(self, row: Dict, frame_num: int, timestamp: float) -> CSVPayload:
+    def _parse_row(self, row: list, frame_num: int, timestamp: float, col_map: Dict) -> CSVPayload:
         """
-        Parse a CSV row and extract position data.
+        Parse a CSV row using the column map.
         
-        Handles both formats:
-          - Rigid bodies: name+axis (e.g., "Box x", "Box y", "Box z")
-          - Skeletons: "SkeletonName:BoneName x/y/z"
+        col_map: Dict[col_index] -> (bone_name, descriptor, axis)
+        For each bone, we collect position (x,y,z) and rotation (x,y,z,w) values.
         """
         bodies: Dict[str, Dict] = {}
         
-        for key, value in row.items():
-            if key in ('Frame', 'Time(Seconds)'):
+        # Skip first two columns (Frame and Time)
+        for col_idx in range(2, len(row)):
+            if col_idx not in col_map:
                 continue
             
-            # Parse column name to extract body/bone name and axis
-            name, axis = self._parse_column_name(key)
-            if not name or not axis:
+            bone_name, descriptor, axis = col_map[col_idx]
+            
+            # Debug first few columns
+            if frame_num == 0 and col_idx < 10:
+                print(f"[CSV Reader] Col {col_idx}: bone='{bone_name}', desc='{descriptor}', axis='{axis}', value='{row[col_idx] if col_idx < len(row) else 'OOB'}'")
+            
+            # Skip if no bone name
+            if not bone_name or bone_name.strip() == '':
+                continue
+            
+            axis_lower = axis.lower().strip()
+            descriptor_lower = descriptor.lower().strip() if descriptor else ""
+            
+            # Only process Position (x,y,z) or Rotation (x,y,z,w) descriptors
+            if descriptor_lower not in ('position', 'rotation'):
+                continue
+            
+            if descriptor_lower == 'position' and axis_lower not in ('x', 'y', 'z'):
+                continue
+            if descriptor_lower == 'rotation' and axis_lower not in ('x', 'y', 'z', 'w'):
                 continue
             
             # Apply target_name filter
-            if self.target_name and not name.lower().startswith(self.target_name.lower()):
+            if self.target_name and not bone_name.lower().startswith(self.target_name.lower()):
                 continue
             
             # Apply skeleton_bones filter
-            if ':' in name:  # It's a skeleton bone
-                bone_part = name.split(':', 1)[1]
+            if ':' in bone_name:
+                bone_part = bone_name.split(':', 1)[1]
                 if self.skeleton_bones and not any(
-                    bone_part.endswith(suffix) for suffix in self.skeleton_bones
+                    bone_part.lower().endswith(suffix.lower()) for suffix in self.skeleton_bones
                 ):
                     continue
             
             # Extract numeric value
             try:
-                pos_value = float(value)
-            except (ValueError, TypeError):
+                if col_idx >= len(row):
+                    continue
+                value = float(row[col_idx])
+                # Skip NaN and inf values
+                if not (-1e10 < value < 1e10):
+                    continue
+            except (ValueError, TypeError, OverflowError, IndexError):
+                if frame_num == 0 and col_idx < 10:
+                    print(f"[CSV Reader] Col {col_idx}: parse error for value '{row[col_idx] if col_idx < len(row) else 'OOB'}'")
                 continue
             
-            # Store position component
-            if name not in bodies:
-                bodies[name] = {}
-            bodies[name][axis] = pos_value
+            # Store component (position or rotation)
+            bone_key = bone_name.lower()
+            if bone_key not in bodies:
+                bodies[bone_key] = {}
+            
+            if descriptor_lower == 'position':
+                if 'pos' not in bodies[bone_key]:
+                    bodies[bone_key]['pos'] = {}
+                bodies[bone_key]['pos'][axis_lower] = value
+            elif descriptor_lower == 'rotation':
+                if 'rot' not in bodies[bone_key]:
+                    bodies[bone_key]['rot'] = {}
+                bodies[bone_key]['rot'][axis_lower] = value
+        
+        if frame_num == 0:
+            print(f"[CSV Reader] Frame 0: parsed {len(bodies)} bodies, total row length: {len(row)}")
         
         return CSVPayload(frame_num, timestamp, bodies)
-    
-    @staticmethod
-    def _parse_column_name(col_name: str) -> Tuple[Optional[str], Optional[str]]:
-        """
-        Parse column name into (body_name, axis).
-        
-        Handles:
-          "Box x" → ("box", "x")
-          "Alyx_Chest z" → ("alyx_chest", "z")
-          "Alyx:Chest y" → ("alyx:chest", "y")
-        """
-        parts = col_name.rsplit(' ', 1)
-        if len(parts) != 2:
-            return None, None
-        
-        name, axis = parts
-        axis = axis.lower()
-        
-        if axis not in ('x', 'y', 'z'):
-            return None, None
-        
-        return name.lower(), axis
 
-
-# Example usage and testing
-if __name__ == "__main__":
-    # Quick test: print first few payloads without timing
-    import sys
-    
-    if len(sys.argv) < 2:
-        print("Usage: python csv_reader.py <csv_file>")
-        sys.exit(1)
-    
-    test_queue: Queue = Queue()
-    reader = CSVReader(
-        csv_path=sys.argv[1],
-        out_queue=test_queue,
-        playback_speed=1.0,
-    )
-    
-    # Read a few frames without actual timing
-    print(f"[Test] Reading from: {sys.argv[1]}")
-    with open(sys.argv[1], 'r') as f:
-        csv_reader = csv.DictReader(f)
-        for i, row in enumerate(csv_reader):
-            if i >= 5:
-                break
-            payload = reader._parse_row(row, i, float(row.get('Time(Seconds)', 0)))
-            print(f"Frame {i}: {payload.bodies}")

@@ -13,10 +13,11 @@ Example:
     --speed 1.5 \\
     --isadora-ip 192.168.1.100
 """
-
 import argparse
 import sys
 import time
+import logging
+from pathlib import Path
 from queue import Queue
 
 # Add parent directory to path for imports
@@ -24,7 +25,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from replay_client.csv_reader import CSVReader
 from mocap_client.osc_processor import OSCProcessor
-from pathlib import Path
 
 
 def parse_args():
@@ -71,74 +71,74 @@ def parse_args():
         help="OSC port on Isadora. Default: 1234"
     )
     
-    parser.add_argument(
-        "--no-xyz",
-        action="store_true",
-        help="Disable XYZ position streaming effect"
-    )
-    
     return parser.parse_args()
 
 
 def main():
     """Main playback loop."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(name)s %(levelname)s %(message)s"
+    )
+    log = logging.getLogger("replay_client")
+    
     args = parse_args()
     
     # Verify CSV file exists
     csv_path = Path(args.csv_file)
     if not csv_path.exists():
-        print(f"Error: CSV file not found: {csv_path}", file=sys.stderr)
+        log.error(f"CSV file not found: {csv_path}")
         sys.exit(1)
     
-    print(f"\n[Replay Client]")
-    print(f"  CSV: {csv_path.resolve()}")
-    print(f"  Target: {args.target_name or 'all rigid bodies'}")
-    print(f"  Speed: {args.speed}x")
-    print(f"  Isadora: {args.isadora_ip}:{args.isadora_port}")
-    print(f"  XYZ streaming: {'disabled' if args.no_xyz else 'enabled'}")
-    print()
+    log.info(f"CSV: {csv_path.resolve()}")
+    log.info(f"Target: {args.target_name or 'all rigid bodies'}")
+    log.info(f"Speed: {args.speed}x")
+    log.info(f"Isadora: {args.isadora_ip}:{args.isadora_port}")
     
-    # Create shared output queue
-    out_queue: Queue = Queue(maxsize=100)
+    # Create shared queue
+    q = Queue()
     
-    # Create CSV reader
-    reader = CSVReader(
+    # Create OSC processor
+    osc = OSCProcessor(
+        in_queue=q,
+        isadora_ip=args.isadora_ip,
+        isadora_port=args.isadora_port,
+    )
+    osc.start()
+    log.info(f"OSC_Processor started, Isadora at {args.isadora_ip}:{args.isadora_port}")
+    
+    # Create CSV reader (ingest data from CSV instead of NatNet)
+    csv = CSVReader(
         csv_path=str(csv_path),
-        out_queue=out_queue,
+        out_queue=q,
         target_name=args.target_name,
         skeleton_bones=args.skeleton_bones if args.skeleton_bones else None,
         playback_speed=args.speed,
     )
     
-    # Create OSC processor (same as live pipeline)
-    osc_proc = OSCProcessor(
-        out_queue=out_queue,
-        isadora_ip=args.isadora_ip,
-        isadora_port=args.isadora_port,
-        enable_xyz=not args.no_xyz,
-    )
+    if not csv.start():
+        log.error("Failed to start CSV reader.  Exiting.")
+        osc.stop()
+        return
     
+    log.info("CSV playback started — press Ctrl+C to stop.")
     try:
-        # Start both reader and processor
-        reader.start()
-        osc_proc.start()
-        
-        print("Starting playback... (Press Ctrl+C to stop)")
-        print()
-        
-        # Keep main thread alive
-        while reader.running:
+        # Wait for reader to finish playback
+        while csv.running:
             time.sleep(0.1)
         
-        print("\nPlayback completed")
+        # Allow queue to drain before exiting
+        log.info("Draining queue...")
+        q.join()
+        log.info("Playback completed.")
     
     except KeyboardInterrupt:
-        print("\n\nStopping playback...")
+        log.info("Shutting down.")
     
     finally:
-        reader.stop()
-        osc_proc.stop()
-        print("Stopped")
+        csv.stop()
+        osc.stop()
+        osc.join(timeout=2.0)
 
 
 if __name__ == "__main__":
