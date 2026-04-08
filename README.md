@@ -249,7 +249,7 @@ Expected Motive CSV export structure:
 ```
 Row 1   (0-indexed: 0)    Metadata (key,value pairs)
 Row 2   (0-indexed: 1)    Empty
-Row 3   (0-indexed: 2)    Empty
+Row 3   (0-indexed: 2)    Bone/No-Bone
 Row 4   (0-indexed: 3)    Bone/segment names (e.g., "Will:Chest", "Will:Hips")
 Row 5   (0-indexed: 4)    Empty
 Row 6   (0-indexed: 5)    Descriptors (e.g., "Position", "Rotation")
