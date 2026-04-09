@@ -163,7 +163,7 @@ enabling testing, development, and demonstrations without a running Motive serve
 # 1. Install dependencies (once)
 python -m venv .venv
 source .venv/bin/activate  # or .venv\Scripts\Activate.ps1 on Windows
-pip install -r replay_client/requirements.txt
+pip install -r mocap_client/requirements.txt
 
 # 2. Run playback
 python -m replay_client.main replay_client/Will\ Performance.csv

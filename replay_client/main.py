@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from replay_client.csv_reader import CSVReader
 from mocap_client.osc_processor import OSCProcessor
+from utils.bounding_box import print_summary
 
 
 def parse_args():
@@ -146,9 +147,13 @@ def main():
         log.info("Draining queue...")
         q.join()
         log.info("Playback completed.")
+        
+        # Print statistics summary
+        print_summary()
     
     except KeyboardInterrupt:
         log.info("Shutting down.")
+        print_summary()
     
     finally:
         csv.stop()
