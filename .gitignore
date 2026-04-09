@@ -31,3 +31,7 @@ output.txt
 *.log
 *_output.txt
 *_err.txt
+
+# Large mocap data files
+motive-captures/
+*.csv
