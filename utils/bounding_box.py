@@ -35,12 +35,8 @@ def bounding_box(item: dict, osc_client: Any) -> bool:
     # Screen frame: [x (right), y (up)]
     # Depth: positive away from camera
     mocap_x, mocap_y, mocap_z = pos
-    
-    # Convert from mm to meters
-    mocap_x /= 1000.0
-    mocap_y /= 1000.0
-    mocap_z /= 1000.0
-    
+
+
     # Since +z mocap is towards camera, negate to get depth (positive away)
     depth = -mocap_z
     
@@ -51,23 +47,12 @@ def bounding_box(item: dict, osc_client: Any) -> bool:
     
     # Divide by depth to get normalized screen pixel coordinates
     depth = uv1[2]
-    
     u = uv1[0] / depth
     v = uv1[1] / depth
-    
-    # Normalize screen coordinates to -50 to 50
-    # Map from pixel space [0, 1020] and [0, 570] to [-50, 50]
-    u_norm = (u / SCREEN_WIDTH) * 100 - 50
-    v_norm = (v / SCREEN_HEIGHT) * 100 - 50
-    
-    # Normalize depth to 0-100 (assuming max depth of 10m = 10000mm)
-    # Adjust MAX_DEPTH if your expected depth range differs
-    MAX_DEPTH = 10.0  # meters
-    depth_norm = (depth / MAX_DEPTH) * 100
 
     # Send normalized OSC messages
-    osc_client.send_message(f"/{base}x", float(u_norm))
-    osc_client.send_message(f"/{base}y", float(v_norm))
-    osc_client.send_message(f"/{base}depth", float(depth_norm))
+    osc_client.send_message(f"/{base}x", float(u))
+    osc_client.send_message(f"/{base}y", float(v))
+    osc_client.send_message(f"/{base}depth", float(depth))
 
     return True
