@@ -288,3 +288,163 @@ check for skeleton bones.
 A `NameError: name 'file'` in `get_as_string()` crashes the command thread's
 pretty-printer. This does not affect data flow — `_build_id_map` runs before the crash.
 
+---
+
+## csv_client
+
+CSV-based motion-capture playback that reads recorded Motive CSV exports and
+streams XYZ position as individual OSC float messages to Isadora. Use this for
+offline analysis, testing, or replaying recorded capture sessions without a
+live Motive server.
+
+### Quick start
+
+```powershell
+# 1. Install dependencies (once, if not already done)
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r csv_client/requirements.txt
+
+# 2. Run test to verify setup
+python -m csv_client.test
+
+# 3. Stream CSV data to Isadora
+python -m csv_client.main
+
+# 4. Verify output (separate window)
+python osc_listener.py
+```
+
+### How it works
+
+`csv_client` replicates `mocap_client` functionality but reads from a Motive CSV
+export file instead of a live UDP stream. The OSC output format is identical, so
+Isadora integration requires no changes.
+
+**Key differences from mocap_client:**
+- Reads from CSV file (`motive-captures/roses-take2-scene1.csv` by default)
+- Supports playback speed control (default: 1.0× real-time at 120 FPS)
+- Can replay recorded sessions multiple times
+- No live Motive server connection required
+- Useful for testing, debugging, and analyzing motion capture data
+
+### Architecture
+
+```
+CSV File (Motive export)
+        │
+        ▼
+   CSVReader              (csv_reader.py)
+   read_and_stream()
+     1. parse header rows 0–6
+     2. build segment → rotation/position columns map
+     3. for each data row:
+        - extract frame number and timestamp
+        - parse position (X,Y,Z) and quaternion (qX,qY,qZ,qW)
+        - apply TARGET_SEGMENT / SKELETON_BONES filter
+        - enqueue payload
+        - sleep to match playback rate
+           │
+           ▼
+       out_queue (thread-safe Queue)
+           │
+           ▼
+       OSCProcessor           (shared with mocap_client)
+       consumer daemon thread @ 30 Hz
+         - hands payloads to middleware.py
+           │
+           ▼
+       middleware.py          (dispatch layer)
+         - routes each payload to enabled effects
+           │
+           ▼
+       xyz.py                 (position sender)
+         - sends /<name>x, /<name>y, /<name>z as floats
+```
+
+### Configuration (`csv_client/main.py`)
+
+| Variable | Default | Description |
+|---|---|---|
+| `CSV_PATH` | `motive-captures/roses-take2-scene1.csv` | Path to Motive CSV export file |
+| `PLAYBACK_RATE` | `1.0` | Playback speed multiplier (1.0 = real-time at 120 FPS, 2.0 = 2× speed) |
+| `TARGET_SEGMENT` | `None` | `None` = all segments; `"Emma:Head"` = single segment only |
+| `SKELETON_BONES` | `["Chest"]` | Bone suffix whitelist for skeletons; `None` = all bones |
+| `ISADORA_IP` | `127.0.0.1` | Isadora machine IP |
+| `ISADORA_PORT` | `1234` | Isadora OSC listen port |
+
+### Filtering logic
+
+CSV client applies the same filtering as mocap_client:
+
+- **Skeleton bones**: Only bones whose suffix matches `SKELETON_BONES` are forwarded
+  (e.g. `["Chest"]` matches `Emma:Chest`, `ally:Chest`, etc.)
+- **Rigid bodies**: All rigid bodies pass through without filtering (unless `TARGET_SEGMENT` is set)
+- **Segmentation**: Both are included in the output stream
+
+### CSV format
+
+The CSV reader expects Motive's standard export format:
+
+```
+Row 0:    Metadata (Format Version, Take Name, Capture Frame Rate, etc.)
+Row 1:    (empty)
+Row 2:    Type labels (Bone, RigidBody, etc.)
+Row 3:    Segment/Bone names
+Row 4:    IDs
+Row 5:    Component type (Rotation, Position)
+Row 6:    Column labels (Frame, Time (Seconds), X, Y, Z, W, etc.)
+Row 7+:   Data rows
+```
+
+Each segment contains:
+- **Rotation**: 4 float columns (Quaternion: X, Y, Z, W)
+- **Position**: 3 float columns (X, Y, Z)
+
+### OSC output format
+
+Identical to `mocap_client`. Position is sent as **three separate float messages**:
+
+```
+/<name>x   float   (e.g. /emmachestx, /allychestx)
+/<name>y   float
+/<name>z   float
+```
+
+Segment names are lowercased with colons removed (e.g. `Emma:Chest` → `/emmachestx`).
+
+### Troubleshooting
+
+**"CSV file not found"**
+Ensure the CSV path is correct. Use an absolute path or a path relative to the workspace root.
+
+**No segments found**
+Verify the CSV is in Motive's export format with proper headers in rows 0–6.
+
+**Position values all zero (0, 0, 0)**
+Check that the CSV has position data in the expected columns. The position is extracted from the first 3 "Position" columns per segment in row 5.
+
+**Very slow playback**
+The CSV file is large (>50 MB). Processing the full file may take time. Set `PLAYBACK_RATE` to a higher value (e.g., `10.0`) to speed up playback during tests.
+
+---
+
+## General setup
+
+### Dependencies
+
+Both `mocap_client` and `csv_client` require:
+- Python 3.9+
+- `pythonosc` for OSC output
+- Optional: Isadora for live OSC reception
+
+Install with:
+```powershell
+pip install python-osc
+```
+
+### Test utilities
+
+- `osc_listener.py` — Prints all incoming OSC messages on port 1234 (debug tool)
+- `osc_sender.py` — Send test OSC messages to verify network connectivity
+
