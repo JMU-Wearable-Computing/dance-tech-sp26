@@ -1,0 +1,44 @@
+{
+  "phase_0": [
+    {
+      "path": "motive-captures/roses-take2-scene1(in).csv",
+      "start_time": 0.0,
+      "skeleton_bones": ["Chest"],
+      "target_name": null,
+      "position_scale": 0.001
+    }
+  ],
+  "phase_1": [
+    {
+      "path": "motive-captures/Roses-Scene2-ALLY(in).csv",
+      "start_time": 80.0,
+      "skeleton_bones": ["Chest"],
+      "target_name": null,
+      "position_scale": 0.001
+    },
+    {
+      "path": "motive-captures/Roses-Scene2-EMMA(in).csv",
+      "start_time": 80.0,
+      "skeleton_bones": ["Chest"],
+      "target_name": null,
+      "position_scale": 0.001
+    }
+  ],
+  "phase_2": [
+    {
+      "path": "motive-captures/Roses-Scene3-ALLY(in).csv",
+      "start_time": 150.0,
+      "skeleton_bones": ["Chest"],
+      "target_name": null,
+      "position_scale": 0.001
+    },
+    {
+      "path": "motive-captures/Roses-Scene3-EMMA(in).csv",
+      "start_time": 150.0,
+      "skeleton_bones": ["Chest"],
+      "target_name": null,
+      "position_scale": 0.001
+    }
+  ],
+  "playback_speed": 1.0
+}

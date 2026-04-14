@@ -217,19 +217,7 @@ class CSVReader:
                             "timestamp": payload.timestamp,
                         }
                         self.out_queue.put(msg)
-                        if self._debug_enqueued_samples < 5:
-                            log.info(
-                                "Queued sample frame=%s segment=%s pos=(%.5f, %.5f, %.5f)",
-                                frame_num,
-                                segment_name,
-                                pos[0],
-                                pos[1],
-                                pos[2],
-                            )
-                            self._debug_enqueued_samples += 1
                     self.frame_count += 1
-                    if self.frame_count % 100 == 0:
-                        log.info("Queued %s frames", self.frame_count)
         
         except FileNotFoundError:
             log.error("CSV file not found: %s", self.csv_path)
