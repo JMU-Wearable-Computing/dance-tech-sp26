@@ -1,9 +1,9 @@
 """
 Multi-CSV Synchronization Driver for Unified Performance Playback
 
-Orchestrates playback of multiple Motive CSV files with phases:
-- Phase 0: Read CSVs sequentially (one at a time)
-- Phase 1: Read multiple CSVs in parallel (simultaneously)
+Orchestrates playback of multiple Motive CSV files with scenes:
+- Scene 1: Read CSVs sequentially (one at a time)
+- Scene 2: Read multiple CSVs in parallel (simultaneously)
 
 Maintains frame-accurate timing with a unified master clock and merges all
 data into a single OSC output stream to Isadora.
@@ -16,14 +16,20 @@ Usage:
 
 Example config (roses-performance.json):
     {
-        "phase_0": [
-            {"path": "roses_take1.csv", "skeleton_bones": ["Chest"]},
-            {"path": "roses_take2.csv", "skeleton_bones": ["Chest"]}
-        ],
-        "phase_1": [
-            {"path": "dancers_backup.csv", "skeleton_bones": ["Chest"]},
-            {"path": "roses_take3.csv", "skeleton_bones": ["Chest"]}
-        ]
+        "scene_1": {
+            "start_time": 0.0,
+            "csvs": [
+                {"path": "roses_take1.csv", "start_time": 0.0, "skeleton_bones": ["Chest"]},
+                {"path": "roses_take2.csv", "start_time": 2.5, "skeleton_bones": ["Chest"]}
+            ]
+        },
+        "scene_2": {
+            "start_time": 30.0,
+            "csvs": [
+                {"path": "dancers_backup.csv", "start_time": 0.0, "skeleton_bones": ["Chest"]},
+                {"path": "roses_take3.csv", "start_time": 1.0, "skeleton_bones": ["Chest"]}
+            ]
+        }
     }
 """
 
@@ -52,17 +58,24 @@ log = logging.getLogger("roses_driver")
 class CSVConfig:
     """Configuration for a single CSV file in the performance."""
     path: str
-    start_time: float = 0.0  # Time (seconds) when this CSV should start relative to master clock
+    start_time: float = 0.0  # Time (seconds) when this CSV should start relative to scene start
     skeleton_bones: Optional[List[str]] = field(default_factory=lambda: ["Chest"])
     target_name: Optional[str] = None
     position_scale: float = 0.001  # Convert mm to m
 
 
 @dataclass
+class SceneConfig:
+    """Configuration for a scene containing one or more CSV files."""
+    start_time: float = 0.0  # Time (seconds) when this scene starts relative to master clock
+    csvs: List[CSVConfig] = field(default_factory=list)
+
+
+@dataclass
 class PerformanceConfig:
-    """Configuration for multi-phase CSV playback performance."""
-    phase_0: List[CSVConfig] = field(default_factory=list)
-    phase_1: List[CSVConfig] = field(default_factory=list)
+    """Configuration for multi-scene CSV playback performance."""
+    scene_1: SceneConfig = field(default_factory=SceneConfig)
+    scene_2: SceneConfig = field(default_factory=SceneConfig)
     playback_speed: float = 1.0
     
     @classmethod
@@ -71,31 +84,36 @@ class PerformanceConfig:
         with open(json_path, 'r') as f:
             data = json.load(f)
         
-        phase_0 = [
-            CSVConfig(
-                path=item['path'],
-                start_time=item.get('start_time', 0.0),
-                skeleton_bones=item.get('skeleton_bones', ["Chest"]),
-                target_name=item.get('target_name'),
-                position_scale=item.get('position_scale', 0.001),
+        def _parse_csv_list(csv_data: List[dict]) -> List[CSVConfig]:
+            return [
+                CSVConfig(
+                    path=item['path'],
+                    start_time=item.get('start_time', 0.0),
+                    skeleton_bones=item.get('skeleton_bones', ["Chest"]),
+                    target_name=item.get('target_name'),
+                    position_scale=item.get('position_scale', 0.001),
+                )
+                for item in csv_data
+            ]
+
+        def _parse_scene(scene_key: str) -> SceneConfig:
+            scene_data = data.get(scene_key, {})
+
+            # Backward compatibility: if scene key maps directly to a list, treat it as csvs.
+            if isinstance(scene_data, list):
+                return SceneConfig(start_time=0.0, csvs=_parse_csv_list(scene_data))
+
+            if not isinstance(scene_data, dict):
+                return SceneConfig()
+
+            return SceneConfig(
+                start_time=scene_data.get('start_time', 0.0),
+                csvs=_parse_csv_list(scene_data.get('csvs', [])),
             )
-            for item in data.get('phase_0', [])
-        ]
-        
-        phase_1 = [
-            CSVConfig(
-                path=item['path'],
-                start_time=item.get('start_time', 0.0),
-                skeleton_bones=item.get('skeleton_bones', ["Chest"]),
-                target_name=item.get('target_name'),
-                position_scale=item.get('position_scale', 0.001),
-            )
-            for item in data.get('phase_1', [])
-        ]
         
         return cls(
-            phase_0=phase_0,
-            phase_1=phase_1,
+            scene_1=_parse_scene('scene_1'),
+            scene_2=_parse_scene('scene_2'),
             playback_speed=data.get('playback_speed', 1.0),
         )
 
@@ -106,15 +124,15 @@ class TimingCoordinator:
     
     The coordinator:
     - Tracks global start time when playback begins
-    - Manages phase transitions
-    - Signals when phases are complete
+    - Manages scene transitions
+    - Signals when scenes are complete
     """
     
     def __init__(self):
         """Initialize the timing coordinator."""
         self.start_time: Optional[float] = None
-        self.phase_0_complete = threading.Event()
-        self.phase_1_complete = threading.Event()
+        self.scene_1_complete = threading.Event()
+        self.scene_2_complete = threading.Event()
         self.all_complete = threading.Event()
         self._lock = threading.Lock()
     
@@ -125,17 +143,17 @@ class TimingCoordinator:
                 self.start_time = time.time()
                 log.info(f"Master clock started at {self.start_time:.3f}")
     
-    def signal_phase_0_complete(self):
-        """Signal that phase 0 playback is complete."""
+    def signal_scene_1_complete(self):
+        """Signal that scene 1 playback is complete."""
         with self._lock:
-            self.phase_0_complete.set()
-            log.info("Phase 0 complete")
+            self.scene_1_complete.set()
+            log.info("Scene 1 complete")
     
-    def signal_phase_1_complete(self):
-        """Signal that phase 1 playback is complete."""
+    def signal_scene_2_complete(self):
+        """Signal that scene 2 playback is complete."""
         with self._lock:
-            self.phase_1_complete.set()
-            log.info("Phase 1 complete")
+            self.scene_2_complete.set()
+            log.info("Scene 2 complete")
     
     def signal_all_complete(self):
         """Signal that all phases are complete."""
@@ -143,13 +161,13 @@ class TimingCoordinator:
             self.all_complete.set()
             log.info("All phases complete")
     
-    def wait_phase_0_complete(self, timeout: Optional[float] = None) -> bool:
-        """Wait for phase 0 to complete. Returns True if signaled, False if timeout."""
-        return self.phase_0_complete.wait(timeout=timeout)
+    def wait_scene_1_complete(self, timeout: Optional[float] = None) -> bool:
+        """Wait for scene 1 to complete. Returns True if signaled, False if timeout."""
+        return self.scene_1_complete.wait(timeout=timeout)
     
-    def wait_phase_1_complete(self, timeout: Optional[float] = None) -> bool:
-        """Wait for phase 1 to complete. Returns True if signaled, False if timeout."""
-        return self.phase_1_complete.wait(timeout=timeout)
+    def wait_scene_2_complete(self, timeout: Optional[float] = None) -> bool:
+        """Wait for scene 2 to complete. Returns True if signaled, False if timeout."""
+        return self.scene_2_complete.wait(timeout=timeout)
     
     def wait_all_complete(self, timeout: Optional[float] = None) -> bool:
         """Wait for all phases to complete. Returns True if signaled, False if timeout."""
@@ -164,11 +182,11 @@ class TimingCoordinator:
 
 class CSVPlaylistManager:
     """
-    Orchestrates phase-based playback of multiple CSV files.
+    Orchestrates scene-based playback of multiple CSV files.
     
     Manages:
-    - Starting CSV readers for each phase
-    - Synchronizing phase transitions
+    - Starting CSV readers for each scene
+    - Synchronizing scene transitions
     - Monitoring reader health
     """
     
@@ -191,29 +209,74 @@ class CSVPlaylistManager:
         self.playback_speed = playback_speed
         self.active_readers: List[CSVReader] = []
         self._lock = threading.Lock()
+        self._stop_event = threading.Event()
+
+    def _sleep_interruptibly(self, total_seconds: float) -> bool:
+        """Sleep in short chunks so Ctrl+C and stop requests are responsive."""
+        if total_seconds <= 0:
+            return True
+        end_time = time.time() + total_seconds
+        while time.time() < end_time:
+            if self._stop_event.is_set():
+                return False
+            remaining = end_time - time.time()
+            time.sleep(min(0.1, max(0.0, remaining)))
+        return True
+
+    def _wait_for_reader(self, reader: CSVReader, timeout: float, label: str) -> bool:
+        """Join a reader thread using short polling intervals for responsiveness."""
+        if not reader._thread:
+            return True
+
+        deadline = time.time() + timeout
+        while reader._thread.is_alive():
+            if self._stop_event.is_set():
+                return False
+            if time.time() >= deadline:
+                log.error(f"CSV reader timeout (>{timeout}s): {label}")
+                return False
+            reader._thread.join(timeout=0.1)
+        return True
     
-    def start_csv_sequentially(self, csv_configs: List[CSVConfig]) -> bool:
+    def start_scene_sequentially(self, scene: SceneConfig, scene_name: str = "Scene 1") -> bool:
         """
-        Start CSV readers sequentially (one at a time, wait for completion).
-        Respects each CSV's start_time relative to the master clock.
+        Start scene CSV readers sequentially (one at a time, wait for completion).
+        Respects scene start_time (relative to master clock) and CSV start_time
+        (relative to scene start).
         
         Args:
-            csv_configs: List of CSV configurations to play in sequence
+            scene: Scene configuration to play in sequence
+            scene_name: Human-readable scene name for logging
         
         Returns:
             True if all CSVs completed successfully, False if error/timeout
         """
-        log.info(f"Starting {len(csv_configs)} CSV(s) sequentially (Phase 0)")
+        csv_configs = scene.csvs
+        scene_start_time = scene.start_time
+        self._stop_event.clear()
+        log.info(f"Starting {len(csv_configs)} CSV(s) sequentially ({scene_name})")
+
+        elapsed = self.timing_coordinator.elapsed_time()
+        if elapsed < scene_start_time:
+            wait_time = scene_start_time - elapsed
+            log.info(f"  Waiting {wait_time:.2f}s for {scene_name} start at {scene_start_time:.2f}s")
+            if not self._sleep_interruptibly(wait_time):
+                return False
         
         for idx, cfg in enumerate(csv_configs):
-            # Wait until it's time to start this CSV
+            # Wait until the CSV's scene-relative start offset is reached.
+            target_start = scene_start_time + cfg.start_time
             elapsed = self.timing_coordinator.elapsed_time()
-            if elapsed < cfg.start_time:
-                wait_time = cfg.start_time - elapsed
+            if elapsed < target_start:
+                wait_time = target_start - elapsed
                 log.info(f"  [{idx+1}/{len(csv_configs)}] Waiting {wait_time:.2f}s before starting: {cfg.path}")
-                time.sleep(wait_time)
+                if not self._sleep_interruptibly(wait_time):
+                    return False
             
-            log.info(f"  [{idx+1}/{len(csv_configs)}] Starting at {cfg.start_time}s: {cfg.path}")
+            log.info(
+                f"  [{idx+1}/{len(csv_configs)}] Starting at scene+{cfg.start_time:.2f}s "
+                f"(master {target_start:.2f}s): {cfg.path}"
+            )
             
             reader = CSVReader(
                 csv_path=cfg.path,
@@ -232,44 +295,59 @@ class CSVPlaylistManager:
             # Wait for this reader to complete before starting next
             # (join with a reasonable timeout based on typical performance length)
             timeout = 600.0  # 10 minutes max per CSV
-            if reader._thread:
-                reader._thread.join(timeout=timeout)
-                if reader._thread.is_alive():
-                    log.error(f"CSV reader timeout (>{timeout}s): {cfg.path}")
-                    return False
+            if not self._wait_for_reader(reader, timeout=timeout, label=cfg.path):
+                return False
             
             with self._lock:
-                self.active_readers.remove(reader)
+                if reader in self.active_readers:
+                    self.active_readers.remove(reader)
             
             log.info(f"  [{idx+1}/{len(csv_configs)}] Complete: {cfg.path}")
         
         return True
     
-    def start_csvs_parallel(self, csv_configs: List[CSVConfig]) -> bool:
+    def start_scene_parallel(self, scene: SceneConfig, scene_name: str = "Scene 2") -> bool:
         """
-        Start multiple CSV readers in parallel (simultaneously).
-        Respects each CSV's start_time relative to the master clock.
+        Start scene CSV readers in parallel.
+        Respects scene start_time (relative to master clock) and CSV start_time
+        (relative to scene start).
         
         Args:
-            csv_configs: List of CSV configurations to play in parallel
+            scene: Scene configuration to play in parallel
+            scene_name: Human-readable scene name for logging
         
         Returns:
             True if all CSVs completed successfully, False if error/timeout
         """
-        log.info(f"Starting {len(csv_configs)} CSV(s) in parallel (Phase 1)")
+        csv_configs = scene.csvs
+        scene_start_time = scene.start_time
+        self._stop_event.clear()
+        log.info(f"Starting {len(csv_configs)} CSV(s) in parallel ({scene_name})")
+
+        elapsed = self.timing_coordinator.elapsed_time()
+        if elapsed < scene_start_time:
+            wait_time = scene_start_time - elapsed
+            log.info(f"  Waiting {wait_time:.2f}s for {scene_name} start at {scene_start_time:.2f}s")
+            if not self._sleep_interruptibly(wait_time):
+                return False
         
-        # First, wait for synchronized start time if needed
-        max_start_time = max((cfg.start_time for cfg in csv_configs), default=0.0)
-        if max_start_time > 0:
-            elapsed = self.timing_coordinator.elapsed_time()
-            if elapsed < max_start_time:
-                wait_time = max_start_time - elapsed
-                log.info(f"  Waiting {wait_time:.2f}s before parallel start")
-                time.sleep(wait_time)
+        # Start each reader when its scene-relative offset is reached.
+        csv_configs_sorted = sorted(csv_configs, key=lambda cfg: cfg.start_time)
         
         readers = []
-        for idx, cfg in enumerate(csv_configs):
-            log.info(f"  [{idx+1}/{len(csv_configs)}] Starting at {cfg.start_time}s: {cfg.path}")
+        for idx, cfg in enumerate(csv_configs_sorted):
+            target_start = scene_start_time + cfg.start_time
+            elapsed = self.timing_coordinator.elapsed_time()
+            if elapsed < target_start:
+                wait_time = target_start - elapsed
+                log.info(f"  [{idx+1}/{len(csv_configs)}] Waiting {wait_time:.2f}s before starting: {cfg.path}")
+                if not self._sleep_interruptibly(wait_time):
+                    return False
+
+            log.info(
+                f"  [{idx+1}/{len(csv_configs)}] Starting at scene+{cfg.start_time:.2f}s "
+                f"(master {target_start:.2f}s): {cfg.path}"
+            )
             
             reader = CSVReader(
                 csv_path=cfg.path,
@@ -289,21 +367,20 @@ class CSVPlaylistManager:
         # Wait for all readers to complete
         timeout = 600.0  # 10 minutes max
         for reader in readers:
-            if reader._thread:
-                reader._thread.join(timeout=timeout)
-                if reader._thread.is_alive():
-                    log.error(f"CSV reader timeout (>{timeout}s)")
-                    return False
+            if not self._wait_for_reader(reader, timeout=timeout, label=getattr(reader, "csv_path", "unknown")):
+                return False
         
         with self._lock:
             for reader in readers:
-                self.active_readers.remove(reader)
+                if reader in self.active_readers:
+                    self.active_readers.remove(reader)
         
         log.info(f"  All {len(csv_configs)} CSV(s) completed in parallel")
         return True
     
     def stop_all(self):
         """Stop all active CSV readers."""
+        self._stop_event.set()
         with self._lock:
             stopped_count = len(self.active_readers)
             for reader in self.active_readers:
@@ -375,12 +452,14 @@ def main():
     if not config_path.exists():
         log.error(f"Config file not found: {config_path}")
         sys.exit(1)
-    
+    time.sleep(0.5)
     try:
         config = PerformanceConfig.from_json(str(config_path))
         log.info(f"Loaded performance config from {config_path}")
-        log.info(f"  Phase 0 CSVs: {len(config.phase_0)}")
-        log.info(f"  Phase 1 CSVs: {len(config.phase_1)}")
+        log.info(f"  Scene 1 CSVs: {len(config.scene_1.csvs)}")
+        log.info(f"  Scene 2 CSVs: {len(config.scene_2.csvs)}")
+        log.info(f"  Scene 1 start: {config.scene_1.start_time:.2f}s")
+        log.info(f"  Scene 2 start: {config.scene_2.start_time:.2f}s")
         log.info(f"  Playback speed: {args.speed}x")
     except Exception as e:
         log.error(f"Failed to load config: {e}")
@@ -410,35 +489,35 @@ def main():
         # Start master clock
         timing_coordinator.start()
         
-        # Execute Phase 0: Sequential playback
-        if config.phase_0:
-            if not playlist_manager.start_csv_sequentially(config.phase_0):
-                log.error("Phase 0 failed")
+        # Execute Scene 1: Sequential playback
+        if config.scene_1.csvs:
+            if not playlist_manager.start_scene_sequentially(config.scene_1, scene_name="Scene 1"):
+                log.error("Scene 1 failed")
                 sys.exit(1)
-            timing_coordinator.signal_phase_0_complete()
+            timing_coordinator.signal_scene_1_complete()
         else:
-            log.info("No Phase 0 CSVs configured")
-            timing_coordinator.signal_phase_0_complete()
+            log.info("No Scene 1 CSVs configured")
+            timing_coordinator.signal_scene_1_complete()
         
-        # Small pause between phases
+        # Small pause between scenes
         time.sleep(0.1)
         
-        # Before Phase 1 starts, kill any remaining Phase 0 readers
-        if config.phase_1:
-            phase_1_start_time = min((cfg.start_time for cfg in config.phase_1), default=0.0)
+        # Before Scene 2 starts, kill any remaining Scene 1 readers
+        if config.scene_2.csvs:
+            scene_2_start_time = config.scene_2.start_time
             if playlist_manager.active_readers:
-                log.info(f"Phase 1 starting at {phase_1_start_time}s - stopping any remaining Phase 0 readers")
+                log.info(f"Scene 2 starting at {scene_2_start_time:.2f}s - stopping any remaining Scene 1 readers")
                 playlist_manager.stop_all()
         
-        # Execute Phase 1: Parallel playback
-        if config.phase_1:
-            if not playlist_manager.start_csvs_parallel(config.phase_1):
-                log.error("Phase 1 failed")
+        # Execute Scene 2: Parallel playback
+        if config.scene_2.csvs:
+            if not playlist_manager.start_scene_parallel(config.scene_2, scene_name="Scene 2"):
+                log.error("Scene 2 failed")
                 sys.exit(1)
-            timing_coordinator.signal_phase_1_complete()
+            timing_coordinator.signal_scene_2_complete()
         else:
-            log.info("No Phase 1 CSVs configured")
-            timing_coordinator.signal_phase_1_complete()
+            log.info("No Scene 2 CSVs configured")
+            timing_coordinator.signal_scene_2_complete()
         
         timing_coordinator.signal_all_complete()
         

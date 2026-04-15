@@ -1,44 +1,53 @@
 {
-  "phase_0": [
-    {
-      "path": "motive-captures/roses-take2-scene1.csv",
-      "start_time": 0.0,
-      "skeleton_bones": ["Chest"],
-      "target_name": null,
-      "position_scale": 0.001
-    }
-  ],
-  "phase_1": [
-    {
-      "path": "motive-captures/Roses-Scene2-ALLY.csv",
-      "start_time": 80.0,
-      "skeleton_bones": ["Chest"],
-      "target_name": null,
-      "position_scale": 0.001
-    },
-    {
-      "path": "motive-captures/Roses-Scene2-EMMA002.csv",
-      "start_time": 80.0,
-      "skeleton_bones": ["Chest"],
-      "target_name": null,
-      "position_scale": 0.001
-    }
-  ],
-  "phase_2": [
-    {
-      "path": "motive-captures/Roses-Scene3-ALLY.csv",
-      "start_time": 150.0,
-      "skeleton_bones": ["Chest"],
-      "target_name": null,
-      "position_scale": 0.001
-    },
-    {
-      "path": "motive-captures/Roses-Scene3-EMMA.csv",
-      "start_time": 150.0,
-      "skeleton_bones": ["Chest"],
-      "target_name": null,
-      "position_scale": 0.001
-    }
-  ],
+  "scene_1": {
+    "start_time": 0.0,
+    "csvs": [
+      {
+        "path": "motive-captures/roses-take2-scene1.csv",
+        "start_time": 0.0,
+        "skeleton_bones": ["Chest"],
+        "target_name": null,
+        "position_scale": 0.001
+      }
+    ]
+  },
+  "scene_2": {
+    "start_time": 80.0,
+    "csvs": [
+      {
+        "path": "motive-captures/Roses-Scene2-ALLY.csv",
+        "start_time": 0.0,
+        "skeleton_bones": ["Chest"],
+        "target_name": null,
+        "position_scale": 0.001
+      },
+      {
+        "path": "motive-captures/Roses-Scene2-EMMA002.csv",
+        "start_time": 0.0,
+        "skeleton_bones": ["Chest"],
+        "target_name": null,
+        "position_scale": 0.001
+      }
+    ]
+  },
+  "scene_3": {
+    "start_time": 150.0,
+    "csvs": [
+      {
+        "path": "motive-captures/Roses-Scene3-ALLY.csv",
+        "start_time": 0.0,
+        "skeleton_bones": ["Chest"],
+        "target_name": null,
+        "position_scale": 0.001
+      },
+      {
+        "path": "motive-captures/Roses-Scene3-EMMA.csv",
+        "start_time": 0.0,
+        "skeleton_bones": ["Chest"],
+        "target_name": null,
+        "position_scale": 0.001
+      }
+    ]
+  },
   "playback_speed": 1.0
 }

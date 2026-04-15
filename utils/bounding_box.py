@@ -15,6 +15,7 @@ SCREEN_HEIGHT = 1080.0
 CAMERA_DISTANCE_CM = 170.0  # Camera 170 cm away at +z from mocap origin
 FOV_H_DEG = 78.0  # Horizontal field of view in degrees
 FOV_V_DEG = 40.0   # Vertical field of view in degrees
+CAMERA_PITCH_DEG = 15.0  # Positive = camera looks downward toward stage
 
 # Calculate focal lengths from FOV
 # fx = (width/2) / tan(FOV_h/2)
@@ -24,8 +25,11 @@ FOV_V_RAD = np.radians(FOV_V_DEG)
 FX = (SCREEN_WIDTH * 0.5) / np.tan(FOV_H_RAD * 0.5)
 FY = (SCREEN_HEIGHT * 0.5) / np.tan(FOV_V_RAD * 0.5)
 
+# Stage-space calibration after normalization to [-50, 50].
+Y_STAGE_OFFSET = -25.0
+
 # Zoom factor: < 1.0 to zoom out (wider view), > 1.0 to zoom in (narrower view)
-ZOOM = 2.5  # Adjust this to control magnification (0.5 = 2x zoom out)
+ZOOM = 2  # Adjust this to control magnification (0.5 = 2x zoom out)
 FX /= ZOOM
 FY /= ZOOM
 
@@ -83,7 +87,7 @@ def bounding_box(item: dict, osc_client: Any) -> bool:
     p_proj = K @ P_camera
     
     # Normalize by depth to get pixel coordinates
-    depth = p_proj[2]+ 0.25
+    depth = p_proj[2]
     if depth <= 0:  # Point is behind camera
         return False
     
@@ -92,8 +96,9 @@ def bounding_box(item: dict, osc_client: Any) -> bool:
 
     # Normalize screen coordinates to -50 to 50
     # Map from pixel space [0, SCREEN_WIDTH] and [0, SCREEN_HEIGHT] to [-50, 50]
-    u_norm = (u / SCREEN_WIDTH) * 100.0 - 45.0
-    v_norm = (v / SCREEN_HEIGHT) * 100.0 - 70.0
+    u_norm = (u / SCREEN_WIDTH) * 100.0 - 50.0
+    v_norm = (v / SCREEN_HEIGHT) * 100.0 - 50.0
+    v_norm += Y_STAGE_OFFSET
 
     # Normalize intensity (depth) to 0-100 
     # 100 = at camera (brightest), 0 = 10m away (darkest)
