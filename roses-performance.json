@@ -16,7 +16,7 @@
     "csvs": [
       {
         "path": "motive-captures/Roses-Scene2-ALLY.csv",
-        "start_time": 0.0,
+        "start_time": 4.0,
         "skeleton_bones": ["Chest"],
         "target_name": null,
         "position_scale": 0.001
@@ -29,25 +29,5 @@
         "position_scale": 0.001
       }
     ]
-  },
-  "scene_3": {
-    "start_time": 150.0,
-    "csvs": [
-      {
-        "path": "motive-captures/Roses-Scene3-ALLY.csv",
-        "start_time": 0.0,
-        "skeleton_bones": ["Chest"],
-        "target_name": null,
-        "position_scale": 0.001
-      },
-      {
-        "path": "motive-captures/Roses-Scene3-EMMA.csv",
-        "start_time": 0.0,
-        "skeleton_bones": ["Chest"],
-        "target_name": null,
-        "position_scale": 0.001
-      }
-    ]
-  },
-  "playback_speed": 1.0
+  }
 }

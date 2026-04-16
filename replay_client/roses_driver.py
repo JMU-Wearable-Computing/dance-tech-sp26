@@ -486,6 +486,11 @@ def main():
     )
     
     try:
+        for count in (3, 2, 1, 0):
+            print(count, flush=True)
+            if count > 0:
+                time.sleep(0.99)
+
         # Start master clock
         timing_coordinator.start()
         
