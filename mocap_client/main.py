@@ -15,7 +15,7 @@ import logging
 from queue import Queue
 
 from mocap_client.nat_client import NatClient
-from mocap_client.osc_processor import OSCProcessor
+from mocap_client.osc_batch_processor import OSCBatchProcessor
 
 # --- Configuration -------------------------------------------------------
 # Motive NatNet server config
@@ -43,9 +43,9 @@ def main():
 
     q = Queue()
 
-    osc = OSCProcessor(q, isadora_ip=ISADORA_IP, isadora_port=ISADORA_PORT)
+    osc = OSCBatchProcessor(q, isadora_ip=ISADORA_IP, isadora_port=ISADORA_PORT)
     osc.start()
-    log.info(f"OSC_Processor started, Isadora at {ISADORA_IP}:{ISADORA_PORT}")
+    log.info(f"OSC_BatchProcessor started, Isadora at {ISADORA_IP}:{ISADORA_PORT}")
 
     nat = NatClient(
         out_queue=q,

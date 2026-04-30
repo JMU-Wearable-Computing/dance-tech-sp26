@@ -18,7 +18,7 @@ class OSCProcessor(threading.Thread):
     Expected payloads are dicts with keys like `segment`, `quat`, `pos`,
     and `timestamp`.
     """
-
+    # will windows ip: 10.255.255.254
     def __init__(self, in_queue: Queue, isadora_ip: str = "127.0.0.1",
                  isadora_port: int = 1234, name: str = "OSC_Processor",
                  target_fps: float = 30.0):

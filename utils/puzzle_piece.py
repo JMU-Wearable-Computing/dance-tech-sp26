@@ -50,7 +50,7 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
             continue
         
         # Parse segment name: "Emma_Chest" -> prefix="Emma", bone="Chest"
-        parts = segment.rsplit("_", 1)
+        parts = segment.rsplit(":", 1)
         if len(parts) != 2:
             continue
         
@@ -127,7 +127,7 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
                         address = f"/{dancer_name.lower()}/{bone_name}_rel_RShoulder"
                         osc_client.send_message(address, [float(adjusted_pos[0]), float(adjusted_pos[1]), float(adjusted_pos[2])])
                         handled = True
-        
+
         elif role == "legs":
             # Emma: send adjusted positions accounting for hip position difference
             for bone_name, pos in joints.items():

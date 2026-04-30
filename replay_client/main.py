@@ -24,7 +24,7 @@ from queue import Queue
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from replay_client.csv_reader import CSVReader
-from mocap_client.osc_processor import OSCProcessor
+from mocap_client.osc_batch_processor import OSCBatchProcessor
 from utils.bounding_box import print_summary
 
 
@@ -58,7 +58,7 @@ def parse_args():
         default=1.0,
         help="Playback speed multiplier (1.0=normal, 2.0=2x faster). Default: 1.0"
     )
-    
+    # will windows ip: 10.255.255.254
     parser.add_argument(
         "--isadora-ip",
         default="127.0.0.1",
@@ -113,14 +113,14 @@ def main():
     # Create shared queue
     q = Queue()
     
-    # Create OSC processor
-    osc = OSCProcessor(
+    # Create OSC batch processor
+    osc = OSCBatchProcessor(
         in_queue=q,
         isadora_ip=args.isadora_ip,
         isadora_port=args.isadora_port,
     )
     osc.start()
-    log.info(f"OSC_Processor started, Isadora at {args.isadora_ip}:{args.isadora_port}")
+    log.info(f"OSC_BatchProcessor started, Isadora at {args.isadora_ip}:{args.isadora_port}")
     
     # Create CSV reader (ingest data from CSV instead of NatNet)
     csv = CSVReader(
