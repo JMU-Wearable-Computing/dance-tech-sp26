@@ -201,14 +201,6 @@ class NatClient:
                 new_map[encoded_id] = name
                 retained_skeleton_bones += 1
 
-        # Log all bones received from Motive
-        logger.info(
-            "[NatClient] ALL BONES FROM MOTIVE: %d total bones received",
-            len(all_bones),
-        )
-        for bone in all_bones:
-            logger.info("[NatClient]   %s", bone)
-
         # Replace the map with the current filtered view so it stays small and
         # reflects what the batch router actually consumes.
         self._id_to_name = new_map

@@ -36,17 +36,17 @@ DANCER_CONFIG = {
     "Ally": {
         "role": "torso",
         "skeleton_prefix": "Ally", # need to draw lines for neck and backtop
-        "body_parts": ["head", "neck", "chest", "ab", "hip", "lshoulder", "rshoulder"],
+        "body_parts": ["head", "backtop", "neck", "lshoulder", "rshoulder", "ab", "waistlfront", "waistrfront"],
     },
     "Riley": {
         "role": "arms",
         "skeleton_prefix": "Riley",
-        "body_parts": ["luarm", "ruarm", "lfarmp", "rfarmp", "lhand", "rhand"],
+        "body_parts": ["lelbowout", "relbowout", "lhand", "rhand"],
     },
     "Emma": {
         "role": "legs",
         "skeleton_prefix": "Emma",
-        "body_parts": ["lthigh", "lshin", "lfoot", "ltoe", "rthigh", "rshin", "rfoot", "rtoe"],
+        "body_parts": ["lheel", "rheel", "lkneeout", "rkneeout"],
     }
 }
 
@@ -98,6 +98,53 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
         
         dancer_joints[dancer_name][bone_name] = np.array(pos, dtype=float)
     
+    
+    # Derive missing joint positions where possible so visuals have required anchors.
+    def _mid(a, b):
+        if a is None or b is None:
+            return None
+        return (a + b) / 2.0
+
+    for dancer_name, joints in dancer_joints.items():
+        # Convenience getter (keys are stored lowercase)
+        def g(k):
+            return joints.get(k)
+
+        def s(k, v):
+            if v is not None and k not in joints:
+                joints[k] = v
+
+        # Knees: approximate as midpoint between thigh and shin
+        s('lkneeout', _mid(g('lthigh'), g('lshin')))
+        s('rkneeout', _mid(g('rthigh'), g('rshin')))
+
+        # Elbows: midpoint between upper arm and hand
+        s('lelbowout', _mid(g('luarm'), g('lhand')))
+        s('relbowout', _mid(g('ruarm'), g('rhand')))
+
+        # Heels: midpoint between foot and toe
+        s('lheel', _mid(g('lfoot'), g('ltoe')))
+        s('rheel', _mid(g('rfoot'), g('rtoe')))
+
+        # Back/top of torso: prefer chest, else midpoint of neck and ab
+        if 'backtop' not in joints:
+            if g('chest') is not None:
+                s('backtop', g('chest'))
+            else:
+                s('backtop', _mid(g('neck'), g('ab')))
+
+        # Neck/head fallbacks
+        s('neck', _mid(g('chest'), g('head')))
+        if 'head' not in joints:
+            # fall back to neck if head missing
+            s('head', g('neck'))
+
+        # Ab / waist fallbacks
+        s('ab', _mid(g('chest'), g('hip')))
+        # Waist front approximations (left/right)
+        s('waistlfront', _mid(g('ab'), g('lthigh')))
+        s('waistrfront', _mid(g('ab'), g('rthigh')))
+
     handled = False
     
     # Get torso anchor points (Ally)
