@@ -16,7 +16,7 @@ from queue import Queue
 from pathlib import Path
 
 from csv_client.csv_reader import CSVReader
-from mocap_client.osc_processor import OSCProcessor
+from mocap_client.osc_batch_processor import OSCBatchProcessor
 
 # --- Configuration -------------------------------------------------------
 # Path to the CSV file (relative or absolute)
@@ -47,9 +47,9 @@ def main():
 
     q = Queue()
 
-    osc = OSCProcessor(q, isadora_ip=ISADORA_IP, isadora_port=ISADORA_PORT)
+    osc = OSCBatchProcessor(q, isadora_ip=ISADORA_IP, isadora_port=ISADORA_PORT)
     osc.start()
-    log.info(f"OSC_Processor started, Isadora at {ISADORA_IP}:{ISADORA_PORT}")
+    log.info(f"OSC_BatchProcessor started, Isadora at {ISADORA_IP}:{ISADORA_PORT}")
 
     csv_reader = CSVReader(
         csv_path=CSV_PATH,
