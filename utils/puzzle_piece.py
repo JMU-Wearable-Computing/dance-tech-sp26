@@ -36,17 +36,17 @@ DANCER_CONFIG = {
     "Ally": {
         "role": "torso",
         "skeleton_prefix": "Ally", # need to draw lines for neck and backtop
-        "body_parts": ["head", "backtop", "neck", "lshoulder", "rshoulder", "ab", "waistlfront", "waistrfront"],
+        "body_parts": ["head", "neck", "chest", "ab", "hip", "lshoulder", "rshoulder"],
     },
     "Riley": {
         "role": "arms",
         "skeleton_prefix": "Riley",
-        "body_parts": ["lelbowout", "relbowout", "lhand", "rhand"],
+        "body_parts": ["luarm", "ruarm", "lfarmp", "rfarmp", "lhand", "rhand"],
     },
     "Emma": {
         "role": "legs",
         "skeleton_prefix": "Emma",
-        "body_parts": ["lheel", "rheel", "lkneeout", "rkneeout"],
+        "body_parts": ["lthigh", "lshin", "lfoot", "ltoe", "rthigh", "rshin", "rfoot", "rtoe"],
     }
 }
 
@@ -71,13 +71,15 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
         segment = item.get("segment")
         pos = item.get("pos")
 
-        #  Parse segment name: "emma:chest" -> prefix="emma", bone="chest"
-        parts = segment.rsplit(":", 1)
+        #  Parse segment name: "Emma_Chest" -> prefix="Emma", bone="chest"
+        parts = segment.rsplit("_", 1)
         if len(parts) != 2:
-            logger.debug(f"Segment name not in expected format (prefix:bone): {segment}")
+            logger.debug(f"Segment name not in expected format (prefix_bone): {segment}")
             continue
         
         skeleton_prefix, bone_name = parts
+        skeleton_prefix = skeleton_prefix.strip()
+        bone_name = bone_name.strip().lower()
         logger.debug(f"Parsed segment: prefix={skeleton_prefix}, bone={bone_name}")
         
         # Find matching dancer (case-insensitive comparison)
@@ -106,8 +108,8 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
     
     ally_lshoulder = ally_joints.get("lshoulder")
     ally_rshoulder = ally_joints.get("rshoulder")
-    ally_lhip = ally_joints.get("waistlfront")  # Use waistlfront as left hip anchor
-    ally_rhip = ally_joints.get("waistrfront")  # Use waistrfront as right hip anchor
+    ally_lhip = ally_joints.get("hip")  # Use hip as hip anchor
+    ally_rhip = ally_joints.get("hip")  # Use hip as hip anchor
     
     # Get arm and leg performer's own anchor points for adjustment
     riley_joints = dancer_joints.get("Riley", {})
@@ -115,8 +117,8 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
     riley_rshoulder = riley_joints.get("rshoulder")
     
     emma_joints = dancer_joints.get("Emma", {})
-    emma_lhip = emma_joints.get("waistlfront")  # Use waistlfront as left hip anchor
-    emma_rhip = emma_joints.get("waistrfront")  # Use waistrfront as right hip anchor
+    emma_lhip = emma_joints.get("hip")  # Use hip as left hip anchor
+    emma_rhip = emma_joints.get("hip")  # Use hip as right hip anchor
     # Process each dancer based on their role
     for dancer_name, config in dancer_config.items():
         if dancer_name not in dancer_joints:
