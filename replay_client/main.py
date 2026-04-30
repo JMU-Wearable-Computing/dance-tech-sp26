@@ -48,7 +48,7 @@ def parse_args():
     parser.add_argument(
         "--skeleton-bones",
         nargs="+",
-        default=["Chest"],
+        default=[],
         help="Skeleton bone suffix whitelist. Default: ['Chest']"
     )
     

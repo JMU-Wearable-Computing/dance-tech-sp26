@@ -200,16 +200,22 @@ class CSVReader:
                 payload = self._parse_row(row, frame_num, csv_time, col_map)
                 if payload.bodies:
                     # Convert CSVPayload to dict format expected by OSCProcessor
+                    if frame_num <= 2:
+                        log.debug(f"Frame {frame_num}: payload.bodies keys = {list(payload.bodies.keys())}")
                     for segment_name, body_data in payload.bodies.items():
                         # body_data has nested shape {'pos': {'x':..,'y':..,'z':..}, 'rot': {...}}
                         pos_dict = body_data.get('pos', {})
                         if not pos_dict:
+                            if frame_num <= 2:
+                                log.debug(f"  {segment_name}: no pos_dict")
                             continue
                         pos = (
                             pos_dict.get('x', 0.0),
                             pos_dict.get('y', 0.0),
                             pos_dict.get('z', 0.0),
                         )
+                        if frame_num <= 2:
+                            log.debug(f"  {segment_name}: enqueuing pos={pos}")
                         msg = {
                             "segment": segment_name,
                             "pos": pos,
@@ -218,6 +224,9 @@ class CSVReader:
                         }
                         self.out_queue.put(msg)
                     self.frame_count += 1
+                else:
+                    if frame_num <= 2:
+                        log.debug(f"Frame {frame_num}: payload.bodies is empty")
         
         except FileNotFoundError:
             log.error("CSV file not found: %s", self.csv_path)
@@ -265,11 +274,17 @@ class CSVReader:
             
             # Only process Position (x,y,z) or Rotation (x,y,z,w) descriptors
             if descriptor_lower not in ('position', 'rotation'):
+                if frame_num <= 1 and col_idx < 20:
+                    log.debug(f"Col {col_idx}: skipping descriptor '{descriptor_lower}'")
                 continue
             
             if descriptor_lower == 'position' and axis_lower not in ('x', 'y', 'z'):
+                if frame_num <= 1 and col_idx < 20:
+                    log.debug(f"Col {col_idx}: skipping position axis '{axis_lower}'")
                 continue
             if descriptor_lower == 'rotation' and axis_lower not in ('x', 'y', 'z', 'w'):
+                if frame_num <= 1 and col_idx < 20:
+                    log.debug(f"Col {col_idx}: skipping rotation axis '{axis_lower}'")
                 continue
             
             # Apply target_name filter
