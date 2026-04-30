@@ -65,8 +65,6 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
         logger.debug("puzzle_piece: no items received")
         return False
     
-    logger.debug(f"puzzle_piece: processing {len(items)} items")
-    
     # Build a mapping: dancer_name -> {bone_name -> position}
     dancer_joints: dict[str, dict[str, Any]] = {}    
     for item in items:
@@ -93,8 +91,6 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
             logger.debug(f"No matching dancer for skeleton_prefix: {skeleton_prefix}")
             continue
         
-        logger.debug(f"Matched to dancer: {dancer_name}, bone: {bone_name}")
-        
         if dancer_name not in dancer_joints:
             dancer_joints[dancer_name] = {}
         
@@ -102,17 +98,12 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
     
     handled = False
     
-    logger.info(f"Parsed dancers: {list(dancer_joints.keys())}")
-    for dancer_name, joints in dancer_joints.items():
-        logger.debug(f"  {dancer_name}: {list(joints.keys())}")
-    
     # Get torso anchor points (Ally)
     ally_joints = dancer_joints.get("Ally", {})
     if not ally_joints:
         logger.warning("No Ally (torso) joints found, cannot proceed")
         return False
     
-    logger.debug(f"Ally joints available: {list(ally_joints.keys())}")
     ally_lshoulder = ally_joints.get("lshoulder")
     ally_rshoulder = ally_joints.get("rshoulder")
     ally_lhip = ally_joints.get("waistlfront")  # Use waistlfront as left hip anchor
@@ -126,8 +117,6 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
     emma_joints = dancer_joints.get("Emma", {})
     emma_lhip = emma_joints.get("waistlfront")  # Use waistlfront as left hip anchor
     emma_rhip = emma_joints.get("waistrfront")  # Use waistrfront as right hip anchor
-    print(f"offsets: ally_lshoulder={ally_lshoulder}, riley_lshoulder={riley_lshoulder}, ally_rshoulder={ally_rshoulder}, riley_rshoulder={riley_rshoulder}")
-    print(f"offsets: ally_lwaist={ally_lhip}, emma_lwaist={emma_lhip}, ally_rwaist={ally_rhip}, emma_rwaist={emma_rhip}")
     # Process each dancer based on their role
     for dancer_name, config in dancer_config.items():
         if dancer_name not in dancer_joints:
@@ -137,7 +126,6 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
         joints = dancer_joints[dancer_name]
         role = config.get("role")
         body_parts = config.get("body_parts", [])
-        logger.info(f"Processing {dancer_name} (role={role}) with joints: {len(list(joints.keys()))}")
         
         if role == "torso":
             # Ally: send absolute positions for all configured body parts as anchor points for other dancers
@@ -149,7 +137,6 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
                         logger.debug(f"Torso: {bone_name} has invalid position")
                         continue
                     address = f"/{dancer_name.lower()}/{bone_name}"
-                    logger.info(f"Sending OSC: {address}/x = {pos[0]:.2f}, {address}/y = {pos[1]:.2f}, {address}/z = {pos[2]:.2f}")
                     try:
                         osc_client.send_message(f"{address}/x", normalize_position(float(pos[0])))
                         osc_client.send_message(f"{address}/y", normalize_position(float(pos[1])))
@@ -162,8 +149,6 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
         
         elif role == "arms":
             # Riley: send adjusted positions accounting for shoulder position difference
-            logger.debug(f"Arms processor: ally_lshoulder={ally_lshoulder}, riley_lshoulder={riley_lshoulder}")
-            logger.debug(f"Arms processor: ally_rshoulder={ally_rshoulder}, riley_rshoulder={riley_rshoulder}")
             for bone_name in body_parts:
                 if bone_name in joints:
                     pos = joints[bone_name]
@@ -177,7 +162,6 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
                                 logger.debug(f"Arms (L): {bone_name} has invalid adjusted position")
                                 continue
                             address = f"/{dancer_name.lower()}/{bone_name}_rel_lshoulder"
-                            logger.info(f"Sending OSC (L arm): {address}/x = {adjusted_pos[0]:.2f}, {address}/y = {adjusted_pos[1]:.2f}, {address}/z = {adjusted_pos[2]:.2f}")
                             try:
                                 osc_client.send_message(f"{address}/x", normalize_position(float(adjusted_pos[0])))
                                 osc_client.send_message(f"{address}/y", normalize_position(float(adjusted_pos[1])))
@@ -197,7 +181,6 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
                                 logger.debug(f"Arms (R): {bone_name} has invalid adjusted position")
                                 continue
                             address = f"/{dancer_name.lower()}/{bone_name}_rel_rshoulder"
-                            logger.info(f"Sending OSC (R arm): {address}/x = {adjusted_pos[0]:.2f}, {address}/y = {adjusted_pos[1]:.2f}, {address}/z = {adjusted_pos[2]:.2f}")
                             try:
                                 osc_client.send_message(f"{address}/x", normalize_position(float(adjusted_pos[0])))
                                 osc_client.send_message(f"{address}/y", normalize_position(float(adjusted_pos[1])))
@@ -210,11 +193,10 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
 
         elif role == "legs":
             # Emma: send adjusted positions accounting for hip position difference
-            logger.debug(f"Legs processor: ally_lhip={ally_lhip}, emma_lhip={emma_lhip}")
-            logger.debug(f"Legs processor: ally_rhip={ally_rhip}, emma_rhip={emma_rhip}")
             for bone_name in body_parts:
                 if bone_name in joints:
                     if bone_name.lower().startswith("l"):
+                        pos = joints[bone_name]
                         # Left leg joint: adjust for difference between Emma's L hip and Ally's L hip
                         if ally_lhip is not None and emma_lhip is not None:
                             hip_adjustment = ally_lhip - emma_lhip
@@ -224,7 +206,6 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
                                 logger.debug(f"Legs (L): {bone_name} has invalid adjusted position")
                                 continue
                             address = f"/{dancer_name.lower()}/{bone_name}_rel_lhip"
-                            logger.info(f"Sending OSC (L leg): {address}/x = {adjusted_pos[0]:.2f}, {address}/y = {adjusted_pos[1]:.2f}, {address}/z = {adjusted_pos[2]:.2f}")
                             try:
                                 osc_client.send_message(f"{address}/x", normalize_position(float(adjusted_pos[0])))
                                 osc_client.send_message(f"{address}/y", normalize_position(float(adjusted_pos[1])))
@@ -235,6 +216,7 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
                         else:
                             logger.debug(f"Cannot process {bone_name}: missing hip anchors")
                     elif bone_name.lower().startswith("r"):
+                        pos = joints[bone_name]
                         # Right leg joint: adjust for difference between Emma's R hip and Ally's R hip
                         if ally_rhip is not None and emma_rhip is not None:
                             hip_adjustment = ally_rhip - emma_rhip
@@ -244,7 +226,6 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
                                 logger.debug(f"Legs (R): {bone_name} has invalid adjusted position")
                                 continue
                             address = f"/{dancer_name.lower()}/{bone_name}_rel_rhip"
-                            logger.info(f"Sending OSC (R leg): {address}/x = {adjusted_pos[0]:.2f}, {address}/y = {adjusted_pos[1]:.2f}, {address}/z = {adjusted_pos[2]:.2f}")
                             try:
                                 osc_client.send_message(f"{address}/x", normalize_position(float(adjusted_pos[0])))
                                 osc_client.send_message(f"{address}/y", normalize_position(float(adjusted_pos[1])))
@@ -255,5 +236,4 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
                         else:
                             logger.debug(f"Cannot process {bone_name}: missing hip anchors")
     
-    logger.info(f"puzzle_piece completed: handled={handled}")
     return handled

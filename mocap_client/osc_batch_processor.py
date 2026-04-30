@@ -40,6 +40,7 @@ class OSCBatchProcessor(threading.Thread):
         self._current_frame_num: int | None = None
         self._frame_start_time: float = 0.0
         self._last_sent: dict[int, float] = {}  # frame_num -> last send time
+        self._log_every_n_frames: int = 100
 
     def stop(self):
         self._stop_event.set()
@@ -71,7 +72,6 @@ class OSCBatchProcessor(threading.Thread):
         
         # Frame boundary: flush previous batch and start new one
         if self._current_frame_num is not None and frame_num != self._current_frame_num:
-            logger.info(f"Frame boundary detected: {self._current_frame_num} -> {frame_num}, flushing batch")
             self._flush_batch()
             self._current_frame = {}
             self._current_frame_num = frame_num
@@ -96,7 +96,7 @@ class OSCBatchProcessor(threading.Thread):
         elapsed = time.time() - self._frame_start_time
         logger.debug(f"Batch timeout check: frame {self._current_frame_num}, elapsed {elapsed:.3f}s, timeout {self._batch_timeout}s")
         if elapsed > self._batch_timeout:
-            logger.info(f"Batch timeout exceeded, flushing frame {self._current_frame_num}")
+            logger.debug(f"Batch timeout exceeded, flushing frame {self._current_frame_num}")
             self._flush_batch()
 
     def _flush_batch(self):
@@ -115,7 +115,8 @@ class OSCBatchProcessor(threading.Thread):
         
         # Get all items for this frame
         items = self._current_frame.get(self._current_frame_num, [])
-        logger.info(f"Flushing frame {self._current_frame_num} with {len(items)} items to batch_middleware")
+        if self._current_frame_num % self._log_every_n_frames == 0:
+            logger.info(f"Frame {self._current_frame_num}")
         try:
             batch_middleware.main(items, self.osc_client)
             logger.debug(f"Successfully sent frame {self._current_frame_num}")
