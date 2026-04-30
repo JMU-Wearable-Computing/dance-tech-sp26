@@ -1,0 +1,33 @@
+{
+  "scene_1": {
+    "start_time": 0.0,
+    "csvs": [
+      {
+        "path": "motive-captures/roses-take2-scene1.csv",
+        "start_time": 0.0,
+        "skeleton_bones": ["RThumb", "LThumb", "LShoulder"],
+        "target_name": null,
+        "position_scale": 0.001
+      }
+    ]
+  },
+  "scene_2": {
+    "start_time": 80.0,
+    "csvs": [
+      {
+        "path": "motive-captures/Roses-Scene2-ALLY.csv",
+        "start_time": 4.0,
+        "skeleton_bones": ["RThumb", "LThumb", "LShoulder"],
+        "target_name": null,
+        "position_scale": 0.001
+      },
+      {
+        "path": "motive-captures/Roses-Scene2-EMMA002.csv",
+        "start_time": 0.0,
+        "skeleton_bones": ["RThumb", "LThumb", "LShoulder"],
+        "target_name": null,
+        "position_scale": 0.001
+      }
+    ]
+  }
+}
