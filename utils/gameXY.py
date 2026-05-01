@@ -19,6 +19,8 @@ def gameXY(items: list[dict], osc_client: Any, dancer_config: dict | None = None
                 x_offset = -1.6
             elif '3' in segment:
                 x_offset = 1.6
+        else:
+            continue  # Skip if no segment info
         
         x_pos = float(pos[0]) + x_offset
 
