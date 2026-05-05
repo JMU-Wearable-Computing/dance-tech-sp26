@@ -15,4 +15,5 @@ def send_xyz(item: dict, osc_client: Any) -> bool:
     osc_client.send_message(f"/{base}x", float(pos[0]))
     osc_client.send_message(f"/{base}y", float(pos[1]))
     osc_client.send_message(f"/{base}z", float(pos[2]))
+    print(f"Sent OSC: /{base}x {pos[0]}, /{base}y {pos[1]}, /{base}z {pos[2]}")  # Debug print
     return True

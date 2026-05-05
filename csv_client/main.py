@@ -20,7 +20,7 @@ from mocap_client.osc_processor import OSCProcessor
 
 # --- Configuration -------------------------------------------------------
 # Path to the CSV file (relative or absolute)
-CSV_PATH = "motive-captures/roses-take2-scene1.csv"
+CSV_PATH = "C:/Users/walte/OneDrive/Documents/CRobotic Arm Parts/Isadora Stuff/dance-tech-sp26/theremin_Box.csv"
 
 # Playback rate (1.0 = real-time at 120 FPS, 2.0 = 2x speed, 0.5 = half speed)
 PLAYBACK_RATE = 1.0
@@ -33,11 +33,11 @@ TARGET_SEGMENT = None  # None = all segments, "Name" = single segment
 # Check the CSV for exact bone names (e.g., "Emma:Chest", "Emma:Head").
 # Set to None to forward all bones.
 # Matched by bone suffix (e.g., "Chest" matches "Emma:Chest")
-SKELETON_BONES = ["Chest"]  # Only chest segments (e.g., Emma:Chest)
+SKELETON_BONES = ["LThumb1", "LShoulder", "RThumb1"]  # Only LThumb1 segments
 
 # Isadora OSC receiver config
-ISADORA_IP = "127.0.0.1"
-ISADORA_PORT = 1234
+ISADORA_IP = "172.28.98.126"
+ISADORA_PORT = 1235
 # -------------------------------------------------------------------------
 
 
@@ -51,18 +51,18 @@ def main():
     osc.start()
     log.info(f"OSC_Processor started, Isadora at {ISADORA_IP}:{ISADORA_PORT}")
 
-    csv_reader = CSVReader(
-        csv_path=CSV_PATH,
-        out_queue=q,
-        target_segment=TARGET_SEGMENT,
-        skeleton_bones=SKELETON_BONES,
-        playback_rate=PLAYBACK_RATE,
-    )
-
     try:
-        log.info(f"Reading CSV from {Path(CSV_PATH).resolve()}")
-        csv_reader.read_and_stream()
-        log.info("Playback complete.")
+        while True:
+            csv_reader = CSVReader(
+                csv_path=CSV_PATH,
+                out_queue=q,
+                target_segment=TARGET_SEGMENT,
+                skeleton_bones=SKELETON_BONES,
+                playback_rate=PLAYBACK_RATE,
+            )
+            log.info(f"Reading CSV from {Path(CSV_PATH).resolve()}")
+            csv_reader.read_and_stream()
+            log.info("Playback complete, looping...")
     except KeyboardInterrupt:
         log.info("Interrupted by user.")
     except Exception as e:

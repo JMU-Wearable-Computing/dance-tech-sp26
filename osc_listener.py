@@ -11,9 +11,10 @@ def main():
     disp = dispatcher.Dispatcher()
     disp.set_default_handler(message_handler)
     
-    # Create server on localhost port 1234
-    server = osc_server.ThreadingOSCUDPServer(("127.0.0.1", 1234), disp)
-    print("OSC Listener started on 127.0.0.1:1234")
+    # Create server on the specified IP port 1234
+    server_ip = "172.28.98.126"  # Change this to match your Isadora machine IP
+    server = osc_server.ThreadingOSCUDPServer((server_ip, 1235), disp)
+    print(f"OSC Listener started on {server_ip}:1234")
     print("Waiting for all OSC messages (press Ctrl+C to stop)...")
     
     try:

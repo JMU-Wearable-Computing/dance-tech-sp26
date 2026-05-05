@@ -29,7 +29,7 @@ TARGET_NAME = None  # None = all rigid bodies, "Name" = single rigid body
 
 # Skeleton bone whitelist — only these bones are forwarded from human skeletons.
 # Check Motive's skeleton asset for exact bone names (e.g. "Chest", "Hips").
-SKELETON_BONES = ["Chest"]  # None = all bones; matched by bone suffix (e.g. "Chest" matches "Alyx_Chest")
+SKELETON_BONES = ["LThumb1", "LShoulder", "RThumb1"]  # None = all bones; matched by bone suffix (e.g. "Chest" matches "Alyx_Chest")
 
 # Isadora OSC receiver config
 ISADORA_IP = "127.0.0.1"

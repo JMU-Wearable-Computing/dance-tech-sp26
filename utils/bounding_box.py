@@ -69,6 +69,7 @@ def bounding_box(item: dict, osc_client: Any) -> bool:
     
     Sends: /<segment>x, /<segment>y, /<segment>depth
     """
+
     pos = item.get("pos")
     if pos is None or len(pos) != 3:
         return False
