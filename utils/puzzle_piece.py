@@ -152,7 +152,7 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
     if not ally_joints:
         logger.warning("No Ally (torso) joints found, cannot proceed")
         return False
-    
+    print(f"Ally joints: {ally_joints}")
     ally_lshoulder = ally_joints.get("lshoulder")
     ally_rshoulder = ally_joints.get("rshoulder")
     ally_lhip = ally_joints.get("hip")  # Use hip as hip anchor
@@ -175,7 +175,7 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
         joints = dancer_joints[dancer_name]
         role = config.get("role")
         body_parts = config.get("body_parts", [])
-        
+
         if role == "torso":
             # Ally: send absolute positions for all configured body parts as anchor points for other dancers
             for bone_name in body_parts:
@@ -210,7 +210,7 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
                             if adjusted_pos is None or not all(np.isfinite(adjusted_pos)):
                                 logger.debug(f"Arms (L): {bone_name} has invalid adjusted position")
                                 continue
-                            address = f"/{dancer_name.lower()}/{bone_name}_rel_lshoulder"
+                            address = f"/{dancer_name.lower()}/{bone_name}"
                             try:
                                 osc_client.send_message(f"{address}/x", normalize_position(float(adjusted_pos[0])))
                                 osc_client.send_message(f"{address}/y", normalize_position(float(adjusted_pos[1])))
@@ -229,7 +229,7 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
                             if adjusted_pos is None or not all(np.isfinite(adjusted_pos)):
                                 logger.debug(f"Arms (R): {bone_name} has invalid adjusted position")
                                 continue
-                            address = f"/{dancer_name.lower()}/{bone_name}_rel_rshoulder"
+                            address = f"/{dancer_name.lower()}/{bone_name}"
                             try:
                                 osc_client.send_message(f"{address}/x", normalize_position(float(adjusted_pos[0])))
                                 osc_client.send_message(f"{address}/y", normalize_position(float(adjusted_pos[1])))
@@ -254,7 +254,7 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
                             if adjusted_pos is None or not all(np.isfinite(adjusted_pos)):
                                 logger.debug(f"Legs (L): {bone_name} has invalid adjusted position")
                                 continue
-                            address = f"/{dancer_name.lower()}/{bone_name}_rel_lhip"
+                            address = f"/{dancer_name.lower()}/{bone_name}"
                             try:
                                 osc_client.send_message(f"{address}/x", normalize_position(float(adjusted_pos[0])))
                                 osc_client.send_message(f"{address}/y", normalize_position(float(adjusted_pos[1])))
@@ -274,7 +274,7 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
                             if adjusted_pos is None or not all(np.isfinite(adjusted_pos)):
                                 logger.debug(f"Legs (R): {bone_name} has invalid adjusted position")
                                 continue
-                            address = f"/{dancer_name.lower()}/{bone_name}_rel_rhip"
+                            address = f"/{dancer_name.lower()}/{bone_name}"
                             try:
                                 osc_client.send_message(f"{address}/x", normalize_position(float(adjusted_pos[0])))
                                 osc_client.send_message(f"{address}/y", normalize_position(float(adjusted_pos[1])))
