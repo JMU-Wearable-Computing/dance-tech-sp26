@@ -152,7 +152,6 @@ def puzzle_piece(items: list[dict], osc_client: Any, dancer_config: dict | None 
     if not ally_joints:
         logger.warning("No Ally (torso) joints found, cannot proceed")
         return False
-    print(f"Ally joints: {ally_joints}")
     ally_lshoulder = ally_joints.get("lshoulder")
     ally_rshoulder = ally_joints.get("rshoulder")
     ally_lhip = ally_joints.get("hip")  # Use hip as hip anchor

@@ -26,15 +26,14 @@ class OSCBatchProcessor(threading.Thread):
 
     def __init__(self, in_queue: Queue, isadora_ip: str = "127.0.0.1",
                  isadora_port: int = 1234, name: str = "OSC_BatchProcessor",
-                 target_fps: float = 30.0, batch_timeout: float = 0.05):
+                 batch_timeout: float = 0.05):
         super().__init__(name=name, daemon=True)
         self.in_queue = in_queue
         self.osc_client = udp_client.SimpleUDPClient(isadora_ip, isadora_port)
         self._stop_event = threading.Event()
-        self._min_interval = 1.0 / target_fps
         self._batch_timeout = batch_timeout
-        logger.info(f"OSCBatchProcessor initialized: {isadora_ip}:{isadora_port}, FPS={target_fps}, timeout={batch_timeout}s")
-        
+        logger.info(f"OSCBatchProcessor initialized: {isadora_ip}:{isadora_port}, timeout={batch_timeout}s")
+         
         # Batching state
         self._current_frame: dict[int, list[dict]] = {}  # frame_num -> list of items
         self._current_frame_num: int | None = None
@@ -104,14 +103,6 @@ class OSCBatchProcessor(threading.Thread):
         if self._current_frame_num is None or not self._current_frame:
             logger.debug("_flush_batch: no frame to flush")
             return
-        
-        now = time.time()
-        last_sent_time = self._last_sent.get(self._current_frame_num, 0.0)
-        time_since_last = now - last_sent_time
-        if time_since_last < self._min_interval:
-            logger.debug(f"Rate limit: frame {self._current_frame_num} sent {time_since_last:.3f}s ago, min interval {self._min_interval:.3f}s")
-            return
-        self._last_sent[self._current_frame_num] = now
         
         # Get all items for this frame
         items = self._current_frame.get(self._current_frame_num, [])
