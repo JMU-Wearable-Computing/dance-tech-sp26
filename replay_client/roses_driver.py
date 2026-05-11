@@ -9,10 +9,10 @@ Maintains frame-accurate timing with a unified master clock and merges all
 data into a single OSC output stream to Isadora.
 
 Usage:
-    python -m replay_client.roses_driver --config roses-performance.json \\
-        --isadora-ip 127.0.0.1 \\
-        --isadora-port 1234 \\
-        --speed 1.0
+    
+    python -m replay_client.roses_driver --config roses-performance.json 
+
+    
 
 Example config (roses-performance.json):
     {
