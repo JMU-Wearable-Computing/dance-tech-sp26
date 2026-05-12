@@ -47,8 +47,19 @@ class OSCBatchProcessor(threading.Thread):
     def run(self):
         logger.info("OSCBatchProcessor thread started")
         while not self._stop_event.is_set():
+            # Use an adaptive short wait so timeout-based flushes happen close
+            # to the configured batch timeout instead of waiting on a long poll.
+            timeout = 0.01
+            if self._current_frame_num is not None and self._current_frame:
+                elapsed = time.time() - self._frame_start_time
+                remaining = self._batch_timeout - elapsed
+                if remaining <= 0:
+                    self._flush_batch()
+                    continue
+                timeout = max(0.001, min(0.01, remaining))
+
             try:
-                item = self.in_queue.get(timeout=0.5)
+                item = self.in_queue.get(timeout=timeout)
                 logger.debug(f"Got item from queue: frame={item.get('frame')}, segment={item.get('segment')}")
             except Empty:
                 # On timeout, flush any pending batch
@@ -72,7 +83,6 @@ class OSCBatchProcessor(threading.Thread):
         # Frame boundary: flush previous batch and start new one
         if self._current_frame_num is not None and frame_num != self._current_frame_num:
             self._flush_batch()
-            self._current_frame = {}
             self._current_frame_num = frame_num
             self._frame_start_time = time.time()
         elif self._current_frame_num is None:
@@ -113,3 +123,8 @@ class OSCBatchProcessor(threading.Thread):
             logger.debug(f"Successfully sent frame {self._current_frame_num}")
         except Exception as e:
             logger.error(f"Error sending frame {self._current_frame_num}: {e}", exc_info=True)
+        finally:
+            # Clear sent frame to avoid duplicate re-sends and stale buffering.
+            self._current_frame = {}
+            self._current_frame_num = None
+            self._frame_start_time = 0.0
