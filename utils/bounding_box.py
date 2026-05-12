@@ -125,7 +125,7 @@ def bounding_box(item: dict, osc_client: Any) -> bool:
     # Send OSC messages
     osc_client.send_message(f"/{base}x", float(u_norm))
     osc_client.send_message(f"/{base}y", float(v_norm))
-    osc_client.send_message(f"/{base}intensity", float(intensity))
+    # osc_client.send_message(f"/{base}intensity", float(intensity))
 
     return True
 
